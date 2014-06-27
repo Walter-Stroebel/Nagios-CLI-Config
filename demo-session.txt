@@ -1,0 +1,103 @@
+Here is a sample session.
+
+I did hand-edit any host names from it that I don't want to be public.
+
+/> cd host/dns
+/host/dns> ls
+active_checks_enabled=1
+address=8.8.8.8
+alias=Google DNS
+check_command=check-host-alive
+check_freshness=0
+check_interval=5.000000
+contact_groups=admins
+event_handler_enabled=1
+failure_prediction_enabled=1
+first_notification_delay=0.000000
+flap_detection_enabled=1
+flap_detection_options=o,d,u
+freshness_threshold=0
+high_flap_threshold=0.000000
+host_name=dns
+initial_state=o
+low_flap_threshold=0.000000
+max_check_attempts=10
+notification_interval=0.000000
+notification_options=d,u,r
+notification_period=24x7
+notifications_enabled=1
+obsess_over_host=1
+parents=InternetUplink
+passive_checks_enabled=1
+process_perf_data=1
+retain_nonstatus_information=1
+retain_status_information=1
+retry_interval=1.000000
+stalking_options=n
+parents --> InternetUplink
+check_command --> check-host-alive
+notification_period --> 24x7
+/host/dns> cd ../usa1
+/host/usa1> set host_name usa1_droplet
+Old name is refered to by members in hostgroup.all: Replacing 'linksys,a20,localhost,usa1,InternetUplink,dns,snom320,wxn5001' with 'linksys,a20,localhost,usa1_droplet,InternetUplink,dns,snom320,wxn5001'
+Old name is refered to by members in hostgroup.centos-servers: Replacing 'usa1' with 'usa1_droplet'
+Old name is refered to by members in hostgroup.ssh-servers: Replacing 'localhost,usa1,a20' with 'localhost,usa1_droplet,a20'
+Old name is refered to by members in servicegroup.all: Replacing 'usa1,SSH' with 'usa1_droplet,SSH'
+Old name is refered to by host_name in service.SSH: Replacing 'usa1' with 'usa1_droplet'
+Changing 'host_name' from 'usa1' to 'usa1_droplet'
+/host/usa1_droplet> write
+/host/usa1_droplet> sudo_check
+
+Nagios Core 3.5.1
+Copyright (c) 2009-2011 Nagios Core Development Team and Community Contributors
+Copyright (c) 1999-2009 Ethan Galstad
+Last Modified: 08-30-2013
+License: GPL
+
+Website: http://www.nagios.org
+Reading configuration data...
+   Read main config file okay...
+Processing object config file '/tmp/nagios.big'...
+   Read object config files okay...
+
+Running pre-flight check on configuration data...
+
+Checking services...
+	Checked 17 services.
+Checking hosts...
+Warning: Host 'InternetUplink' has no services associated with it!
+Warning: Host 'linksys' has no services associated with it!
+Warning: Host 'snom320' has no services associated with it!
+Warning: Host 'wxn5001' has no services associated with it!
+	Checked 20 hosts.
+Checking host groups...
+	Checked 7 host groups.
+Checking service groups...
+	Checked 1 service groups.
+Checking contacts...
+	Checked 1 contacts.
+Checking contact groups...
+	Checked 1 contact groups.
+Checking service escalations...
+	Checked 0 service escalations.
+Checking service dependencies...
+	Checked 0 service dependencies.
+Checking host escalations...
+	Checked 0 host escalations.
+Checking host dependencies...
+	Checked 0 host dependencies.
+Checking commands...
+	Checked 154 commands.
+Checking time periods...
+	Checked 4 time periods.
+Checking for circular paths between hosts...
+Checking for circular host and service dependencies...
+Checking global event handlers...
+Checking obsessive compulsive processor commands...
+Checking misc settings...
+
+Total Warnings: 9
+Total Errors:   0
+
+Things look okay - No serious problems were detected during the pre-flight check
+/host/usa1_droplet> quit
