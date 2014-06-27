@@ -14,6 +14,7 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Stack;
 import java.util.StringTokenizer;
 import java.util.TreeMap;
@@ -26,7 +27,7 @@ import java.util.logging.Logger;
  */
 public class NagCliCfg {
 
-    public final static File cacheFile = new File("/tmp/nagios.big");
+    public final static Properties config = new Properties();
 
     public final TreeMap<Types, ArrayList<NagItem>> nagDb = new TreeMap<>();
     public final ArrayList<NagItem> all = new ArrayList<>();
@@ -53,12 +54,44 @@ public class NagCliCfg {
      * @param args the command line arguments
      */
     public static void main(String[] args) {
+        if (args.length > 0) {
+            try (FileReader fr = new FileReader(args[0])) {
+                config.load(fr);
+            } catch (Exception ex) {
+                Logger.getLogger(NagCliCfg.class.getName()).log(Level.SEVERE, null, ex);
+                System.exit(1);
+            }
+        } else if (new File(System.getProperty("user.home"), ".nagclicfg").exists()) {
+            try (FileReader fr = new FileReader(new File(System.getProperty("user.home"), ".nagclicfg"))) {
+                config.load(fr);
+            } catch (Exception ex) {
+                Logger.getLogger(NagCliCfg.class.getName()).log(Level.SEVERE, null, ex);
+                System.exit(1);
+            }
+        } else {
+            config.setProperty("nagios.cache", "/var/cache/nagios3/objects.cache");
+            config.setProperty("nagios.binary", "/usr/sbin/nagios3");
+            config.setProperty("nagios.config", "/etc/nagios3/nagios.cfg");
+            config.setProperty("sudo.ask-pass", "/usr/bin/ssh-askpass");
+            System.err.println("No configuration found. Below is a sample property file.");
+            System.err.println("Adjust as needed and save as " + System.getProperty("user.home") + "/.nagclicfg");
+            try {
+                config.store(System.err, "");
+            } catch (IOException ex) {
+                Logger.getLogger(NagCliCfg.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            System.exit(0);
+        }
         try {
             NagCliCfg cfg = new NagCliCfg();
-            cfg.run(cacheFile);
+            cfg.run(new File(config.getProperty("nagios.cache")));
+            System.out.println("Nagios command-line configurator.");
+            System.out.println("Objects loaded from " + config.getProperty("nagios.cache"));
+            System.out.println("Type 'help' for some assistance.");
             cfg.cli();
         } catch (IOException ex) {
             Logger.getLogger(NagCliCfg.class.getName()).log(Level.SEVERE, null, ex);
+            System.exit(1);
         }
     }
 
@@ -72,13 +105,24 @@ public class NagCliCfg {
             System.out.flush();
             for (String cmd = bfr.readLine(); cmd != null; cmd = bfr.readLine()) {
                 cmd = cmd.trim();
-                if (cmd.equals("quit") || cmd.equals("exit")) {
+                if (cmd.equals("help")) {
+                    System.out.println("quit, exit or ^D: exit the program.");
+                    System.out.println("help: you are reading it.");
+                    System.out.println("cd: move around in the configuration, use [ls] for suggestions.");
+                    System.out.println("ls: list the current object or group.");
+                    System.out.println("sudo_check: run nagios -v config_file using sudo.");
+                    System.out.println("check: run nagios -v config_file without sudo (being root already).");
+                    System.out.println("find: find any named object or group.");
+                    System.out.println("set: set a value in the current object to a new value.");
+                    System.out.println("add: add a value to the current object.");
+                    System.out.println("write: write the entire config to /tmp/nagios.big (one file).");
+                } else if (cmd.equals("quit") || cmd.equals("exit")) {
                     break;
                 } else if (cmd.startsWith("cd")) {
                     cd(cmd.substring(2).trim());
                 } else if (cmd.equals("sudo_check")) {
-                    ProcessBuilder pb = new ProcessBuilder("sudo", "-A", "nagios3", "-v", "/etc/nagios3/nagios.cfg");
-                    pb.environment().put("SUDO_ASKPASS", "/usr/bin/ssh-askpass");
+                    ProcessBuilder pb = new ProcessBuilder("sudo", "-A", config.getProperty("nagios.binary"), "-v", config.getProperty("nagios.config"));
+                    pb.environment().put("SUDO_ASKPASS", config.getProperty("sudo.ask-pass"));
                     pb.redirectErrorStream(true);
                     pb.inheritIO();
                     final Process p = pb.start();
@@ -88,7 +132,7 @@ public class NagCliCfg {
                         // no need to wait any longer?
                     }
                 } else if (cmd.equals("check")) {
-                    ProcessBuilder pb = new ProcessBuilder("nagios3", "-v", "/etc/nagios3/nagios.cfg");
+                    ProcessBuilder pb = new ProcessBuilder(config.getProperty("nagios.binary"), "-v", config.getProperty("nagios.config"));
                     pb.redirectErrorStream(true);
                     pb.inheritIO();
                     final Process p = pb.start();
@@ -166,9 +210,14 @@ public class NagCliCfg {
                 rename(item.get(_k), _v);
                 System.out.println("Changing '" + _k + "' from '" + item.get(_k) + "' to '" + _v + "'");
                 item.put(_k, _v);
-            } else if (!ifExists || item.containsKey(_k)) {
+            } else if (ifExists && item.containsKey(_k)) {
                 System.out.println("Changing '" + _k + "' from '" + item.get(_k) + "' to '" + _v + "'");
                 item.put(_k, _v);
+            } else if (!ifExists && !item.containsKey(_k)) {
+                System.out.println("Adding '" + _k + "' as '" + _v + "'");
+                item.put(_k, _v);
+            } else if (item.containsKey(_k)) {
+                System.out.println("Not adding '" + _k + "' as '" + _v + "'; item already exists. Use [set key value] instead.");
             } else {
                 System.out.println("Not setting '" + _k + "' to '" + _v + "'; not an existing item. Use [add key value] instead.");
             }
