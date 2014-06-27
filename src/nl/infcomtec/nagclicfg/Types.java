@@ -13,6 +13,4 @@ import java.util.TreeSet;
 public enum Types {
 
     command, contact, contactgroup, host, hostgroup, service, servicegroup, timeperiod;
-    public TreeSet<Types> memberOf = new TreeSet<>();
-    public TreeSet<Types> referencedBy = new TreeSet<>();
 }

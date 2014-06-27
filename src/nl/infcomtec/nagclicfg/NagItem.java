@@ -12,9 +12,9 @@ import java.util.TreeMap;
  *
  * @author walter
  */
-public class NagItem extends TreeMap<String, String> {
+public abstract class NagItem extends TreeMap<String, String> {
 
-    private final Types type;
+    protected final Types type;
     public final ArrayList<NagPointer> children = new ArrayList<>();
 
     public NagItem(Types type) {
@@ -33,11 +33,40 @@ public class NagItem extends TreeMap<String, String> {
         return "\nNagItem{" + "type=" + type + "\n" + super.toString() + "\nChildren: " + children + "\n}";
     }
 
-    public String getName() {
-        if (type == Types.service) {
-            return get("service_description");
-        } else {
-            return get(type.toString()+"_name");
+    /**
+     * Service has a non-standard unique ID, basic function for all other
+     * objects.
+     *
+     * @return Unique ID
+     */
+    public abstract String getName();
+
+    /**
+     * Must be implemented to read fields like parent, host_name in service and
+     * members.
+     */
+    public abstract void collectChildren();
+
+    /**
+     * Construct the proper object.
+     *
+     * @param type The type to construct.
+     * @return A generic or specialized NagItem.
+     */
+    public static NagItem construct(Types type) {
+        switch (type) {
+            default:
+                return new NoDepNagItem(type);
+            case contactgroup:
+                return new ContactGroup();
+            case host:
+                return new Host();
+            case hostgroup:
+                return new HostGroup();
+            case service:
+                return new Service();
+            case servicegroup:
+                return new ServiceGroup();
         }
     }
 }

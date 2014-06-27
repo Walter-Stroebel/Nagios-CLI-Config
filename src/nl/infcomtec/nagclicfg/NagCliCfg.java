@@ -29,10 +29,10 @@ public class NagCliCfg {
 
     public final static Properties config = new Properties();
 
-    public final TreeMap<Types, ArrayList<NagItem>> nagDb = new TreeMap<>();
-    public final ArrayList<NagItem> all = new ArrayList<>();
+    public final static TreeMap<Types, ArrayList<NagItem>> nagDb = new TreeMap<>();
+    public final static ArrayList<NagItem> all = new ArrayList<>();
 
-    public NagItem get(Types type, String name) {
+    public static NagItem get(Types type, String name) {
         ArrayList<NagItem> items = nagDb.get(type);
         if (items != null) {
             for (NagItem itm : items) {
@@ -152,7 +152,7 @@ public class NagCliCfg {
                         }
                     } else {
                         for (Map.Entry<String, String> e : item.entrySet()) {
-                            System.out.println(e.getKey() + "=" + e.getValue());
+                            System.out.println(e.getKey() + " " + e.getValue());
                         }
                         for (NagPointer c : item.children) {
                             System.out.println(c.key + " --> " + c.item.getName());
@@ -363,7 +363,7 @@ public class NagCliCfg {
                     StringTokenizer toker = new StringTokenizer(s, " ");
                     toker.nextToken();
                     Types what = Types.valueOf(toker.nextToken());
-                    NagItem itm = new NagItem(what);
+                    NagItem itm = NagItem.construct(what);
                     ArrayList<NagItem> items = nagDb.get(what);
                     if (items == null) {
                         nagDb.put(what, items = new ArrayList<>());
@@ -396,90 +396,7 @@ public class NagCliCfg {
             }
         }
         for (NagItem itm : all) {
-            if (itm.getType() == Types.host) {
-                String k = itm.get("parents");
-                if (k != null && !k.isEmpty()) {
-                    String[] mems = k.split(",");
-                    for (String mem : mems) {
-                        NagItem c = get(Types.host, mem);
-                        itm.children.add(new NagPointer("parents", c));
-                    }
-                }
-            } else if (itm.getType() == Types.service) {
-                String k = itm.get("host_name");
-                if (k != null && !k.isEmpty()) {
-                    NagItem c = get(Types.host, k);
-                    itm.children.add(new NagPointer("host_name", c));
-                }
-            }
-            for (Types t : Types.values()) {
-                for (Map.Entry<String, String> e : itm.entrySet()) {
-                    String refAs = t.toString();
-                    if (refAs.equals("timeperiod")) {
-                        refAs = "period";
-                    }
-                    if (e.getKey().endsWith("_" + refAs)) {
-                        NagItem c = get(t, e.getValue());
-                        if (c != null) {
-                            t.referencedBy.add(itm.getType());
-                            itm.children.add(new NagPointer(e.getKey(), c));
-                        }
-                    }
-                }
-            }
-            for (Map.Entry<String, String> e : itm.entrySet()) {
-                if (e.getKey().contains("member")) {
-                    if (itm.getType() == Types.contactgroup) {
-                        String[] mems = e.getValue().split(",");
-                        for (String mem : mems) {
-                            NagItem c = get(Types.contact, mem);
-                            if (c != null) {
-                                c.getType().referencedBy.add(itm.getType());
-                                c.getType().memberOf.add(itm.getType());
-                                itm.children.add(new NagPointer(e.getKey(), c));
-                            }
-                        }
-                    } else if (itm.getType() == Types.hostgroup) {
-                        String[] mems = e.getValue().split(",");
-                        for (String mem : mems) {
-                            NagItem c = get(Types.host, mem);
-                            if (c != null) {
-                                c.getType().referencedBy.add(itm.getType());
-                                c.getType().memberOf.add(itm.getType());
-                                itm.children.add(new NagPointer(e.getKey(), c));
-                            }
-                        }
-                    } else if (itm.getType() == Types.servicegroup) {
-                        String[] mems = e.getValue().split(",");
-                        for (int i = 0; i < mems.length; i += 2) {
-                            {
-                                NagItem c = get(Types.host, mems[i]);
-                                if (c != null) {
-                                    c.getType().referencedBy.add(itm.getType());
-                                    c.getType().memberOf.add(itm.getType());
-                                    itm.children.add(new NagPointer(e.getKey(), c));
-                                } else {
-                                    System.err.println("Host " + mems[i] + " not found");
-                                }
-                            }
-                            {
-                                NagItem c = get(Types.service, mems[i + 1]);
-                                if (c != null) {
-                                    c.getType().referencedBy.add(itm.getType());
-                                    c.getType().memberOf.add(itm.getType());
-                                    itm.children.add(new NagPointer(e.getKey(), c));
-                                } else {
-                                    System.err.println("Service " + mems[i + 1] + " not found");
-                                }
-                            }
-                        }
-                    } else {
-                        System.out.println(itm);
-                        System.exit(1);
-                    }
-                }
-            }
-
+            itm.collectChildren();
         }
     }
 
