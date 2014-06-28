@@ -23,6 +23,7 @@ import java.util.Properties;
 import java.util.Stack;
 import java.util.StringTokenizer;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -99,7 +100,7 @@ public class NagCliCfg {
                         int idx = fnd.indexOf('=');
                         if (idx > 0) {
                             File f = new File(fnd.substring(idx + 1).trim());
-                            if (!f.exists()){
+                            if (!f.exists()) {
                                 f = new File(nagCfgFile.getParentFile(), fnd.substring(idx + 1).trim());
                             }
                             if (f.exists()) {
@@ -115,7 +116,7 @@ public class NagCliCfg {
                         int idx = fnd.indexOf('=');
                         if (idx > 0) {
                             File dir = new File(fnd.substring(idx + 1).trim());
-                            if (!dir.exists()){
+                            if (!dir.exists()) {
                                 dir = new File(nagCfgFile.getParentFile(), fnd.substring(idx + 1).trim());
                             }
                             if (dir.exists()) {
@@ -167,6 +168,7 @@ public class NagCliCfg {
                     System.out.println("cd: move around in the configuration, use [ls] for suggestions.");
                     System.out.println("check: run 'nagios -v config_file' (do this after write!)");
                     System.out.println("clone: Clones the current object.");
+                    System.out.println("rm: Delete the current object.");
                     System.out.println("find: find any named object or group.");
                     System.out.println("help: you are reading it.");
                     System.out.println("ls: list the current object or group.");
@@ -185,6 +187,12 @@ public class NagCliCfg {
                     } else {
                         cloneObject(bfr);
                     }
+                } else if (cmd.equals("rm")) {
+                    if (item == null) {
+                        System.out.println("Nothing to delete, cd to an object first.");
+                    } else {
+                        delete(bfr);
+                    }
                 } else if (cmd.startsWith("cd")) {
                     cd(cmd.substring(2).trim());
                 } else if (cmd.startsWith("check")) {
@@ -200,7 +208,12 @@ public class NagCliCfg {
                 } else if (cmd.startsWith("ls")) {
                     ls(cmd);
                 } else if (cmd.startsWith("find ")) {
-                    find("/", nagDb, cmd.substring(4).trim());
+                    String arg = cmd.substring(4).trim().toLowerCase();
+                    for (NagItem e : all){
+                        if (e.getName().toLowerCase().contains(arg)){
+                            System.out.println("/"+e.getType().toString()+"/"+e.getName());
+                        }
+                    }
                 } else if (cmd.startsWith("set")) {
                     set(cmd.substring(3).trim(), true);
                 } else if (cmd.startsWith("add")) {
@@ -693,6 +706,10 @@ public class NagCliCfg {
                             continue;
                         }
                         if (s2.equals("}")) {
+                            if (itm.getNameField() == null || itm.getName() == null) {
+                                System.err.println("Fatal error for " + itm + "; cannot handle unnamed items.");
+                                System.exit(1);
+                            }
                             break;
                         }
                         //System.out.println(s2);
@@ -715,52 +732,7 @@ public class NagCliCfg {
             }
         }
     }
-
-    /**
-     * Find arg as a part of the name of any child.
-     *
-     * @param path Current path.
-     * @param where Children to search.
-     * @param arg String to find.
-     */
-    private void find(String path, ArrayList<NagItem> where, String arg) {
-        for (NagItem e : where) {
-            if (e.getName().contains(arg)) {
-                System.out.println(path + e.getName());
-            }
-            findC(path + e.getName() + "/", e.children, arg);
-        }
-    }
-
-    /**
-     * Find arg as a part of the name of any child.
-     *
-     * @param path Current path.
-     * @param where Children to search.
-     * @param arg String to find.
-     */
-    private void findC(String path, ArrayList<NagPointer> where, String arg) {
-        for (NagPointer e : where) {
-            if (e.item.getName().contains(arg)) {
-                System.out.println(path + e.item.getName());
-            }
-            findC(path + e.item.getName() + "/", e.item.children, arg);
-        }
-    }
-
-    /**
-     * Find arg as a part of the name of any child.
-     *
-     * @param path Current path.
-     * @param where Children to search.
-     * @param arg String to find.
-     */
-    private void find(String path, TreeMap<Types, ArrayList<NagItem>> where, String arg) {
-        for (Map.Entry<Types, ArrayList<NagItem>> e : where.entrySet()) {
-            find(path + e.getKey().toString() + "/", e.getValue(), arg);
-        }
-    }
-
+    
     private void cloneObject(BufferedReader bfr) throws IOException {
         NagItem ni = NagItem.construct(this, item.getType());
         if (item.getNameField().equals("name")) {
@@ -781,16 +753,26 @@ public class NagCliCfg {
         // blech, this is hacky
         if (item.type == Types.service) {
             ni.put("service_description", name);
-        } else if (item.type == Types.hostextinfo){
+        } else if (item.type == Types.hostextinfo) {
             ni.put("hostgroup_name", name);
         } else {
             ni.put(item.type.toString() + "_name", name);
+        }
+        if (ni.getNameField() == null || ni.getName() == null) {
+            System.err.println("Fatal error cloning " + ni + "; managed to create a unnamed item.");
+            System.exit(1);
         }
         // crash if the below returns null -- major weird stuff going on!
         nagDb.get(item.type).add(ni);
         ni.collectChildren();
         stack.clear();
         item = ni;
+        ls("ls -rd");
+    }
+
+    private void delete(BufferedReader bfr) {
+        System.out.println("Not implemented yet.");
+        System.out.println("You would have nuked:");
         ls("ls -rd");
     }
 }
