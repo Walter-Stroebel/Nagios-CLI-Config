@@ -5,7 +5,6 @@
 package nl.infcomtec.nagclicfg;
 
 import java.util.ArrayList;
-import java.util.Map.Entry;
 import java.util.TreeMap;
 
 /**
@@ -16,8 +15,16 @@ public abstract class NagItem extends TreeMap<String, String> {
 
     protected final Types type;
     public final ArrayList<NagPointer> children = new ArrayList<>();
+    protected final NagCliCfg owner;
 
-    public NagItem(Types type) {
+    /**
+     * Abstract base constructor.
+     *
+     * @param owner Owning object, needed for referrals.
+     * @param type One of the known Nagios object types.
+     */
+    public NagItem(NagCliCfg owner, Types type) {
+        this.owner = owner;
         this.type = type;
     }
 
@@ -34,12 +41,24 @@ public abstract class NagItem extends TreeMap<String, String> {
     }
 
     /**
-     * Service has a non-standard unique ID, basic function for all other
-     * objects.
+     * All objects should be uniquely named, this method returns that name.
      *
      * @return Unique ID
      */
-    public abstract String getName();
+    public final String getName() {
+        if (getNameField() != null) {
+            return get(getNameField());
+        }
+        return "Object has no name!";
+    }
+
+    /**
+     * Returns the field used to define the name of this object.
+     *
+     * @return Usually '(type)_name', or 'name' for generic objects or
+     * 'service_description' for a named service.
+     */
+    public abstract String getNameField();
 
     /**
      * Must be implemented to read fields like parent, host_name in service and
@@ -53,20 +72,20 @@ public abstract class NagItem extends TreeMap<String, String> {
      * @param type The type to construct.
      * @return A generic or specialized NagItem.
      */
-    public static NagItem construct(Types type) {
+    public static NagItem construct(NagCliCfg owner, Types type) {
         switch (type) {
             default:
-                return new NoDepNagItem(type);
+                return new NoDepNagItem(owner, type);
             case contactgroup:
-                return new ContactGroup();
+                return new ContactGroup(owner);
             case host:
-                return new Host();
+                return new Host(owner);
             case hostgroup:
-                return new HostGroup();
+                return new HostGroup(owner);
             case service:
-                return new Service();
+                return new Service(owner);
             case servicegroup:
-                return new ServiceGroup();
+                return new ServiceGroup(owner);
         }
     }
 }

@@ -6,8 +6,8 @@ package nl.infcomtec.nagclicfg;
 
 public class HostGroup extends NoDepNagItem {
 
-    public HostGroup() {
-        super(Types.hostgroup);
+    public HostGroup(NagCliCfg owner) {
+        super(owner, Types.hostgroup);
     }
 
     @Override
@@ -17,7 +17,7 @@ public class HostGroup extends NoDepNagItem {
         if (members != null) {
             String[] mems = members.split(",");
             for (String mem : mems) {
-                NagItem c = NagCliCfg.get(Types.host, mem);
+                NagItem c = owner.get(Types.host, mem);
                 if (c != null) {
                     children.add(new NagPointer("members", c));
                 }

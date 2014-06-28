@@ -6,8 +6,8 @@ package nl.infcomtec.nagclicfg;
 
 public class ServiceGroup extends NoDepNagItem {
 
-    public ServiceGroup() {
-        super(Types.servicegroup);
+    public ServiceGroup(NagCliCfg owner) {
+        super(owner, Types.servicegroup);
     }
 
     @Override
@@ -18,7 +18,7 @@ public class ServiceGroup extends NoDepNagItem {
             String[] mems = members.split(",");
             for (int i = 0; i < mems.length; i += 2) {
                 {
-                    NagItem c = NagCliCfg.get(Types.host, mems[i]);
+                    NagItem c = owner.get(Types.host, mems[i]);
                     if (c != null) {
                         children.add(new NagPointer("members", c));
                     } else {
@@ -26,7 +26,7 @@ public class ServiceGroup extends NoDepNagItem {
                     }
                 }
                 {
-                    NagItem c = NagCliCfg.get(Types.service, mems[i + 1]);
+                    NagItem c = owner.get(Types.service, mems[i + 1]);
                     if (c != null) {
                         children.add(new NagPointer("members", c));
                     } else {

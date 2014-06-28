@@ -6,8 +6,8 @@ package nl.infcomtec.nagclicfg;
 
 public class ContactGroup extends NoDepNagItem {
 
-    public ContactGroup() {
-        super(Types.contactgroup);
+    public ContactGroup(NagCliCfg owner) {
+        super(owner, Types.contactgroup);
     }
 
     @Override
@@ -17,7 +17,7 @@ public class ContactGroup extends NoDepNagItem {
         if (members != null) {
             String[] mems = members.split(",");
             for (String mem : mems) {
-                NagItem c = NagCliCfg.get(Types.contact, mem);
+                NagItem c = owner.get(Types.contact, mem);
                 if (c != null) {
                     children.add(new NagPointer("members", c));
                 }

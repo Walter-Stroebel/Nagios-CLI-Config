@@ -8,6 +8,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -29,20 +30,14 @@ public class NagCliCfg {
 
     public final static Properties config = new Properties();
 
-    public final static TreeMap<Types, ArrayList<NagItem>> nagDb = new TreeMap<>();
-    public final static ArrayList<NagItem> all = new ArrayList<>();
+    public final TreeMap<Types, ArrayList<NagItem>> nagDb = new TreeMap<>();
+    public final ArrayList<NagItem> all = new ArrayList<>();
 
-    public static NagItem get(Types type, String name) {
+    public NagItem get(Types type, String name) {
         ArrayList<NagItem> items = nagDb.get(type);
         if (items != null) {
             for (NagItem itm : items) {
-                String key;
-                if (type == Types.service) {
-                    key = itm.get("service_description");
-                } else {
-                    key = itm.get(type + "_name");
-                }
-                if (key != null && key.equals(name)) {
+                if (itm.getName() != null && itm.getName().equals(name)) {
                     return itm;
                 }
             }
@@ -69,7 +64,7 @@ public class NagCliCfg {
                 System.exit(1);
             }
         } else {
-            config.setProperty("nagios.cache", "/var/cache/nagios3/objects.cache");
+            // config.setProperty("nagios.cache", "/var/cache/nagios3/objects.cache");
             config.setProperty("nagios.binary", "/usr/sbin/nagios3");
             config.setProperty("nagios.config", "/etc/nagios3/nagios.cfg");
             config.setProperty("sudo.ask-pass", "/usr/bin/ssh-askpass");
@@ -84,7 +79,41 @@ public class NagCliCfg {
         }
         try {
             NagCliCfg cfg = new NagCliCfg();
-            cfg.run(new File(config.getProperty("nagios.cache")));
+            try (BufferedReader main = new BufferedReader(new FileReader(config.getProperty("nagios.config")))) {
+                for (String fnd = main.readLine(); fnd != null; fnd = main.readLine()) {
+                    fnd = fnd.trim();
+                    if (fnd.startsWith("#")) {
+                        continue;
+                    }
+                    if (fnd.isEmpty()) {
+                        continue;
+                    }
+                    if (fnd.startsWith("cfg_file")) {
+                        int idx = fnd.indexOf('=');
+                        if (idx > 0) {
+                            cfg.read(new File(fnd.substring(idx + 1).trim()));
+                        }
+                    } else if (fnd.startsWith("cfg_dir")) {
+                        int idx = fnd.indexOf('=');
+                        if (idx > 0) {
+                            File dir = new File(fnd.substring(idx + 1).trim());
+                            for (File f : dir.listFiles(
+                                    new FilenameFilter() {
+                                        @Override
+                                        public boolean accept(File dir, String name) {
+                                            return name.endsWith(".cfg");
+                                        }
+                                    }
+                            )) {
+                                cfg.read(f);
+                            }
+                        }
+                    }
+                }
+            }
+            for (NagItem itm : cfg.all) {
+                itm.collectChildren();
+            }
             System.out.println("Nagios command-line configurator.");
             System.out.println("Objects loaded from " + config.getProperty("nagios.cache"));
             System.out.println("Type 'help' for some assistance.");
@@ -147,8 +176,11 @@ public class NagCliCfg {
                             System.out.println(t);
                         }
                     } else if (item == null) {
-                        for (NagItem e : nagDb.get(dir)) {
-                            System.out.println(e.getName());
+                        ArrayList<NagItem> col = nagDb.get(dir);
+                        if (col != null) {
+                            for (NagItem e : col) {
+                                System.out.println(e.getName());
+                            }
                         }
                     } else {
                         for (Map.Entry<String, String> e : item.entrySet()) {
@@ -166,7 +198,7 @@ public class NagCliCfg {
                     set(cmd.substring(3).trim(), false);
                 } else if (cmd.startsWith("write")) {
                     write();
-                } else {
+                } else if (!cmd.isEmpty()) {
                     System.out.println("Unknown cmd '" + cmd + "'");
                     System.out.println("... want to implement it?");
                     System.out.println("git clone https://github.com/Walter-Stroebel/NagCliCfg.git");
@@ -178,6 +210,31 @@ public class NagCliCfg {
     }
 
     private void set(String nvp, boolean ifExists) {
+        String[] two = splitNVP(nvp);
+        String key = two[0];
+        String val = two[1];
+        if (item == null) {
+            System.out.println("No current item, cd to one first");
+        } else {
+            if (key.equals(item.getNameField())) {
+                rename(item.get(key), val);
+                System.out.println("Changing '" + key + "' from '" + item.get(key) + "' to '" + val + "'");
+                item.put(key, val);
+            } else if (ifExists && item.containsKey(key)) {
+                System.out.println("Changing '" + key + "' from '" + item.get(key) + "' to '" + val + "'");
+                item.put(key, val);
+            } else if (!ifExists && !item.containsKey(key)) {
+                System.out.println("Adding '" + key + "' as '" + val + "'");
+                item.put(key, val);
+            } else if (item.containsKey(key)) {
+                System.out.println("Not adding '" + key + "' as '" + val + "'; item already exists. Use [set key value] instead.");
+            } else {
+                System.out.println("Not setting '" + key + "' to '" + val + "'; not an existing item. Use [add key value] instead.");
+            }
+        }
+    }
+
+    private String[] splitNVP(String nvp) {
         StringBuilder k = new StringBuilder();
         StringBuilder v = new StringBuilder();
         int ph = 0;
@@ -190,45 +247,32 @@ public class NagCliCfg {
                 }
             } else if (ph == 1) {
                 if (!Character.isWhitespace(c)) {
-                    v.append(c);
+                    if (c != ';') {
+                        v.append(c);
+                    }
                     ph = 2;
                 }
             } else {
+                if (c == ';') {
+                    break;
+                }
                 v.append(c);
             }
         }
-        String _k = k.toString();
-        String _v = v.toString();
-        if (item == null) {
-            System.out.println("No current item, cd to one first");
-        } else {
-            if (item.getType() == Types.service && _k.equals("service_description")) {
-                rename(item.get(_k), _v);
-                System.out.println("Changing '" + _k + "' from '" + item.get(_k) + "' to '" + _v + "'");
-                item.put(_k, _v);
-            } else if (_k.equals(item.getType() + "_name")) {
-                rename(item.get(_k), _v);
-                System.out.println("Changing '" + _k + "' from '" + item.get(_k) + "' to '" + _v + "'");
-                item.put(_k, _v);
-            } else if (ifExists && item.containsKey(_k)) {
-                System.out.println("Changing '" + _k + "' from '" + item.get(_k) + "' to '" + _v + "'");
-                item.put(_k, _v);
-            } else if (!ifExists && !item.containsKey(_k)) {
-                System.out.println("Adding '" + _k + "' as '" + _v + "'");
-                item.put(_k, _v);
-            } else if (item.containsKey(_k)) {
-                System.out.println("Not adding '" + _k + "' as '" + _v + "'; item already exists. Use [set key value] instead.");
-            } else {
-                System.out.println("Not setting '" + _k + "' to '" + _v + "'; not an existing item. Use [add key value] instead.");
-            }
-        }
+        return new String[]{k.toString(), v.toString().trim()};
     }
 
+    /**
+     * Find and update all references to an object whose name was changed.
+     *
+     * @param from Original name.
+     * @param to New name.
+     */
     private void rename(String from, String to) {
         for (NagItem e1 : all) {
             for (NagPointer e2 : e1.children) {
                 if (e2.item.getName().equals(from)) {
-                    System.out.print("Old name is refered to by " + e2.key + " in " + e1.getType() + "." + e1.getName());
+                    System.out.print("Old name is refered to in field '" + e2.key + "' in object '" + e1.getType() + "." + e1.getName()+"'");
                     String[] split = e1.get(e2.key).split(",");
                     String sep = "";
                     StringBuilder rep = new StringBuilder();
@@ -243,13 +287,14 @@ public class NagCliCfg {
                     }
                     System.out.println(": Replacing '" + e1.get(e2.key) + "' with '" + rep + "'");
                     e1.put(e2.key, rep.toString());
-//                } else {
-//                    System.out.println("ok,"+from+" not "+e2.item.getName());
                 }
             }
         }
     }
 
+    /**
+     * Write this configuration as one big file.
+     */
     private void write() {
         try (PrintWriter out = new PrintWriter(new File("/tmp/nagios.big"))) {
             for (NagItem e : all) {
@@ -264,6 +309,11 @@ public class NagCliCfg {
         }
     }
 
+    /**
+     * Change Directory.
+     *
+     * @param path Where to go.
+     */
     private void cd(String path) {
         String oldPath = getPath();
         if (!path.startsWith("/")) {
@@ -326,11 +376,23 @@ public class NagCliCfg {
         }
     }
 
+    /**
+     * Just prints an error message and returns to the path before an attempted
+     * cd.
+     *
+     * @param part Path part that was not found.
+     * @param oldPath Original path.
+     */
     private void cdError(String part, String oldPath) {
         System.out.println("Not found: '" + part + "' in " + getPath());
         cd(oldPath);
     }
 
+    /**
+     * Return the current path.
+     *
+     * @return The current path.
+     */
     private String getPath() {
         StringBuilder path = new StringBuilder();
         if (dir == null) {
@@ -349,7 +411,13 @@ public class NagCliCfg {
         return path.toString();
     }
 
-    public void run(File f) throws IOException {
+    /**
+     * Read a object or group definition file.
+     *
+     * @param f The file to read.
+     * @throws IOException If it does.
+     */
+    public void read(File f) throws IOException {
         try (BufferedReader bfr = new BufferedReader(new FileReader(f))) {
             for (String s = bfr.readLine(); s != null; s = bfr.readLine()) {
                 s = s.trim();
@@ -359,11 +427,18 @@ public class NagCliCfg {
                 if (s.isEmpty()) {
                     continue;
                 }
+                //System.out.println(s);
                 if (s.startsWith("define ")) {
-                    StringTokenizer toker = new StringTokenizer(s, " ");
+                    StringTokenizer toker = new StringTokenizer(s, " {");
                     toker.nextToken();
-                    Types what = Types.valueOf(toker.nextToken());
-                    NagItem itm = NagItem.construct(what);
+                    NagItem itm;
+                    Types what;
+                    try {
+                        what = Types.valueOf(toker.nextToken());
+                        itm = NagItem.construct(this, what);
+                    } catch (Exception oops) {
+                        continue;
+                    }
                     ArrayList<NagItem> items = nagDb.get(what);
                     if (items == null) {
                         nagDb.put(what, items = new ArrayList<>());
@@ -381,7 +456,8 @@ public class NagCliCfg {
                         if (s2.equals("}")) {
                             break;
                         }
-                        String[] parts = s2.split("\t");
+                        //System.out.println(s2);
+                        String[] parts = splitNVP(s2);
                         if (parts.length != 2) {
                             System.out.println(Arrays.toString(parts));
                             System.exit(1);
@@ -389,17 +465,25 @@ public class NagCliCfg {
                             itm.put(parts[0], parts[1]);
                         }
                     }
+                    if (itm.getName() == null || itm.getName().isEmpty()) {
+                        System.err.println("Invalid object found: " + itm);
+                        System.exit(1);
+                    }
                 } else {
                     System.out.println(s);
                     break;
                 }
             }
         }
-        for (NagItem itm : all) {
-            itm.collectChildren();
-        }
     }
 
+    /**
+     * Find arg as a part of the name of any child.
+     *
+     * @param path Current path.
+     * @param where Children to search.
+     * @param arg String to find.
+     */
     private void find(String path, ArrayList<NagItem> where, String arg) {
         for (NagItem e : where) {
             if (e.getName().contains(arg)) {
@@ -409,6 +493,13 @@ public class NagCliCfg {
         }
     }
 
+    /**
+     * Find arg as a part of the name of any child.
+     *
+     * @param path Current path.
+     * @param where Children to search.
+     * @param arg String to find.
+     */
     private void findC(String path, ArrayList<NagPointer> where, String arg) {
         for (NagPointer e : where) {
             if (e.item.getName().contains(arg)) {
@@ -418,6 +509,13 @@ public class NagCliCfg {
         }
     }
 
+    /**
+     * Find arg as a part of the name of any child.
+     *
+     * @param path Current path.
+     * @param where Children to search.
+     * @param arg String to find.
+     */
     private void find(String path, TreeMap<Types, ArrayList<NagItem>> where, String arg) {
         for (Map.Entry<Types, ArrayList<NagItem>> e : where.entrySet()) {
             find(path + e.getKey().toString() + "/", e.getValue(), arg);

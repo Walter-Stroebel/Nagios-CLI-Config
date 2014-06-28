@@ -17,7 +17,7 @@ public class NoDepNagItem extends NagItem {
                     refAs = "period";
                 }
                 if (e.getKey().endsWith("_" + refAs)) {
-                    NagItem c = NagCliCfg.get(t, e.getValue());
+                    NagItem c = owner.get(t, e.getValue());
                     if (c != null) {
                         children.add(new NagPointer(e.getKey(), c));
                     }
@@ -26,13 +26,22 @@ public class NoDepNagItem extends NagItem {
         }
     }
 
-    public NoDepNagItem(Types type) {
-        super(type);
+    /**
+     * Constructor
+     *
+     * @param owner Owning object, needed for referrals.
+     * @param type One of the basic Nagios object types.
+     */
+    public NoDepNagItem(NagCliCfg owner, Types type) {
+        super(owner, type);
     }
 
     @Override
-    public String getName() {
-        return get(type.toString() + "_name");
+    public String getNameField() {
+        String fNam = type.toString() + "_name";
+        if (containsKey(fNam)) return fNam;
+        if (containsKey("name")) return "name";
+        return null;
     }
 
 }
