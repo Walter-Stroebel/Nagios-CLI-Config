@@ -79,6 +79,7 @@ public abstract class NagItem extends TreeMap<String, String> {
     /**
      * Construct the proper object.
      *
+     * @param owner The Nagios data.
      * @param type The type to construct.
      * @return A generic or specialized NagItem.
      */

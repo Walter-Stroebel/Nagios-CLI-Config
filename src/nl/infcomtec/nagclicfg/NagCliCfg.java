@@ -36,6 +36,7 @@ public class NagCliCfg {
 
     public final TreeMap<Types, ArrayList<NagItem>> nagDb = new TreeMap<>();
     public final ArrayList<NagItem> all = new ArrayList<>();
+    public final ArrayList<File> files = new ArrayList<>();
 
     public NagItem get(Types type, String name) {
         ArrayList<NagItem> items = nagDb.get(type);
@@ -71,7 +72,6 @@ public class NagCliCfg {
             config.setProperty("nagios.cache", "/var/cache/nagios3/objects.cache");
             config.setProperty("nagios.binary", "/usr/sbin/nagios3");
             config.setProperty("nagios.config", "/etc/nagios3/nagios.cfg");
-            config.setProperty("sudo.ask-pass", "/usr/bin/ssh-askpass");
             config.setProperty("terminal.width", "100");
             System.err.println("No configuration found. Below is a sample property file.");
             System.err.println("Adjust as needed and save as " + System.getProperty("user.home") + "/.nagclicfg");
@@ -97,22 +97,37 @@ public class NagCliCfg {
                     if (fnd.startsWith("cfg_file")) {
                         int idx = fnd.indexOf('=');
                         if (idx > 0) {
-                            cfg.read(new File(fnd.substring(idx + 1).trim()));
+                            File f = new File(fnd.substring(idx + 1).trim());
+                            if (f.exists()) {
+                                cfg.read(f);
+                                cfg.files.add(f);
+                            } else {
+                                System.err.println("File not found " + config.getProperty("nagios.config") + ": " + fnd);
+                            }
+                        } else {
+                            System.err.println("Bad directive in " + config.getProperty("nagios.config") + ": " + fnd);
                         }
                     } else if (fnd.startsWith("cfg_dir")) {
                         int idx = fnd.indexOf('=');
                         if (idx > 0) {
                             File dir = new File(fnd.substring(idx + 1).trim());
-                            for (File f : dir.listFiles(
-                                    new FilenameFilter() {
-                                        @Override
-                                        public boolean accept(File dir, String name) {
-                                            return name.endsWith(".cfg");
+                            if (dir.exists()) {
+                                for (File f : dir.listFiles(
+                                        new FilenameFilter() {
+                                            @Override
+                                            public boolean accept(File dir, String name) {
+                                                return name.endsWith(".cfg");
+                                            }
                                         }
-                                    }
-                            )) {
-                                cfg.read(f);
+                                )) {
+                                    cfg.read(f);
+                                }
+                                cfg.files.add(dir);
+                            } else {
+                                System.err.println("Directory not found " + config.getProperty("nagios.config") + ": " + fnd);
                             }
+                        } else {
+                            System.err.println("Bad directive in " + config.getProperty("nagios.config") + ": " + fnd);
                         }
                     }
                 }
@@ -141,36 +156,31 @@ public class NagCliCfg {
             for (String cmd = bfr.readLine(); cmd != null; cmd = bfr.readLine()) {
                 cmd = cmd.trim();
                 if (cmd.equals("help")) {
-                    System.out.println("quit, exit or ^D: exit the program.");
-                    System.out.println("help: you are reading it.");
+                    System.out.println("add: add a value to the current object (see also 'set').");
                     System.out.println("cd: move around in the configuration, use [ls] for suggestions.");
+                    System.out.println("check: run 'nagios -v config_file' (do this after write!)");
+                    System.out.println("clone: Clones the current object.");
+                    System.out.println("find: find any named object or group.");
+                    System.out.println("help: you are reading it.");
                     System.out.println("ls: list the current object or group.");
                     System.out.println("    -l (long) show more data (1 item per line)");
                     System.out.println("    -r (refs) also show data from referrals");
                     System.out.println("    -s (sort) sort the output");
                     System.out.println("    -d (dns, implies -l) attempt to resolve the 'address' field (may be slow)");
-                    System.out.println("sudo_check: run nagios -v config_file using sudo.");
-                    System.out.println("check: run nagios -v config_file without sudo (being root already).");
-                    System.out.println("find: find any named object or group.");
-                    System.out.println("set: set a value in the current object to a new value.");
-                    System.out.println("add: add a value to the current object.");
+                    System.out.println("quit, exit or ^D: exit the program.");
+                    System.out.println("set: set a value in the current object to a new value (see also 'add').");
                     System.out.println("write: write the entire config to /tmp/nagios.big (one file).");
                 } else if (cmd.equals("quit") || cmd.equals("exit")) {
                     break;
+                } else if (cmd.equals("clone")) {
+                    if (item == null) {
+                        System.out.println("Nothing to clone, cd to an object first.");
+                    } else {
+                        cloneObject(bfr);
+                    }
                 } else if (cmd.startsWith("cd")) {
                     cd(cmd.substring(2).trim());
-                } else if (cmd.equals("sudo_check")) {
-                    ProcessBuilder pb = new ProcessBuilder("sudo", "-A", config.getProperty("nagios.binary"), "-v", config.getProperty("nagios.config"));
-                    pb.environment().put("SUDO_ASKPASS", config.getProperty("sudo.ask-pass"));
-                    pb.redirectErrorStream(true);
-                    pb.inheritIO();
-                    final Process p = pb.start();
-                    try {
-                        p.waitFor();
-                    } catch (InterruptedException ex) {
-                        // no need to wait any longer?
-                    }
-                } else if (cmd.equals("check")) {
+                } else if (cmd.startsWith("check")) {
                     ProcessBuilder pb = new ProcessBuilder(config.getProperty("nagios.binary"), "-v", config.getProperty("nagios.config"));
                     pb.redirectErrorStream(true);
                     pb.inheritIO();
@@ -189,7 +199,7 @@ public class NagCliCfg {
                 } else if (cmd.startsWith("add")) {
                     set(cmd.substring(3).trim(), false);
                 } else if (cmd.startsWith("write")) {
-                    write();
+                    write(bfr);
                 } else if (!cmd.isEmpty()) {
                     System.out.println("Unknown cmd '" + cmd + "'");
                     System.out.println("... want to implement it?");
@@ -204,7 +214,7 @@ public class NagCliCfg {
     /**
      * List data.
      *
-     * @param cmd Options: -l, -r, -s
+     * @param cmd Options: -l, -r, -s, -d
      */
     private void ls(String cmd) {
         StringTokenizer opts = new StringTokenizer(cmd.substring(2), " -\t");
@@ -318,7 +328,7 @@ public class NagCliCfg {
                 }
                 int m1 = TERMiNAL_WIDTH - m0 - 2;
                 String fmt = "%-" + m0 + "s ";
-                StringBuilder rep = new StringBuilder(String.format(fmt, "").replace("  "," .")).reverse();
+                StringBuilder rep = new StringBuilder(String.format(fmt, "").replace("  ", " .")).reverse();
                 for (String[] e : grid) {
                     String k = e[0];
                     if (k.length() > m0) {
@@ -430,19 +440,100 @@ public class NagCliCfg {
     }
 
     /**
-     * Write this configuration as one big file.
+     * Write this configuration to the Nagios configuration directory.
      */
-    private void write() {
-        try (PrintWriter out = new PrintWriter(new File("/tmp/nagios.big"))) {
-            for (NagItem e : all) {
-                out.println("define " + e.getType().toString() + " {");
-                for (Map.Entry<String, String> e2 : e.entrySet()) {
-                    out.println("\t" + e2.getKey() + "\t" + e2.getValue());
-                }
-                out.println("}");
+    private void write(BufferedReader bfr) throws IOException {
+        boolean isNagCliCfg = true;
+        File nagCfg = new File(config.getProperty("nagios.config"));
+        File nagDir = nagCfg.getParentFile();
+        File nagBak = new File(nagDir, "nagclicfg_nagios_cfg.bak");
+        File cfgDir = new File(nagDir, "nagclicfg.d");
+        for (File f : files) {
+            if (!f.getName().equals("nagclicfg.d") || !f.isDirectory()) {
+                isNagCliCfg = false;
             }
-        } catch (FileNotFoundException ex) {
-            ex.printStackTrace();
+        }
+        if (!isNagCliCfg) {
+            System.out.println("Warning! This might restructure your current Nagios configuration completely!");
+            System.out.println("The following directive will be disabled in " + config.getProperty("nagios.config") + ":");
+            for (File f : files) {
+                if (!f.getName().startsWith("ngcli_")) {
+                    if (f.isDirectory()) {
+                        System.out.println("cfg_dir=" + f.getAbsolutePath());
+                    } else {
+                        System.out.println("cfg_file=" + f.getAbsolutePath());
+                    }
+                }
+            }
+            System.out.println("They will be replaced with one directive: cfg_dir=nagclicfg.d");
+            System.out.println("In that directory, files will be created for each object type.");
+            System.out.println("You can return to your old setup by inverting those modifications.");
+            System.out.println("Are you sure you want to do this (eg. you *HAVE* a backup)?");
+            System.out.print("Type YES to continue: ");
+            String yes = bfr.readLine();
+            if (yes == null) {
+                System.exit(0);
+            }
+            if (!"YES".equals(yes)) {
+                return;
+            }
+            if (!cfgDir.exists()) {
+                if (!cfgDir.mkdir()) {
+                    System.err.println("Failed to create " + cfgDir.getAbsolutePath() + " ... not root?");
+                    System.err.println("Write aborted (nothing was changed).");
+                }
+            }
+            boolean didDelete = nagBak.delete();
+            if (!nagCfg.renameTo(nagBak)) {
+                System.err.println("Failed to backup old " + config.getProperty("nagios.config") + " ... not root?");
+                if (!didDelete) {
+                    System.err.println("Write aborted (nothing was changed).");
+                } else {
+                    System.err.println("Deleted old backup file " + nagBak.getAbsolutePath() + "; nothing else was changed.");
+                }
+                return;
+            }
+            try (PrintWriter pw = new PrintWriter(nagCfg)) {
+                try (BufferedReader main = new BufferedReader(new FileReader(nagBak))) {
+                    for (String fnd = main.readLine(); fnd != null; fnd = main.readLine()) {
+                        fnd = fnd.trim();
+                        if (fnd.startsWith("#")) {
+                            pw.println(fnd);
+                        } else if (fnd.isEmpty()) {
+                            pw.println(fnd);
+                        } else if (fnd.equals("cfg_dir=nagclicfg.d")) {
+                            isNagCliCfg = true;
+                            pw.println(fnd);
+                        } else if (fnd.startsWith("cfg_file")) {
+                            pw.println("# removed by NagCliCfg: " + fnd);
+                            if (!isNagCliCfg) {
+                                // good place to write this
+                                pw.println("cfg_dir=nagclicfg.d");
+                                isNagCliCfg = true;
+                            }
+                        } else if (fnd.startsWith("cfg_dir")) {
+                            pw.println("# removed by NagCliCfg: " + fnd);
+                        } else {
+                            pw.println(fnd);
+                        }
+                    }
+                }
+            }
+            files.clear();
+            files.add(cfgDir);
+        }
+        for (Map.Entry<Types, ArrayList<NagItem>> cfg : nagDb.entrySet()) {
+            try (PrintWriter out = new PrintWriter(new File(cfgDir, cfg.getKey().toString() + ".cfg"))) {
+                for (NagItem e : cfg.getValue()) {
+                    out.println("define " + e.getType().toString() + " {");
+                    for (Map.Entry<String, String> e2 : e.entrySet()) {
+                        out.println("\t" + e2.getKey() + "\t" + e2.getValue());
+                    }
+                    out.println("}");
+                }
+            } catch (FileNotFoundException ex) {
+                ex.printStackTrace();
+            }
         }
     }
 
@@ -657,5 +748,36 @@ public class NagCliCfg {
         for (Map.Entry<Types, ArrayList<NagItem>> e : where.entrySet()) {
             find(path + e.getKey().toString() + "/", e.getValue(), arg);
         }
+    }
+
+    private void cloneObject(BufferedReader bfr) throws IOException {
+        NagItem ni = NagItem.construct(this, item.getType());
+        if (item.getNameField().equals("name")) {
+            // kewl, cloning a generic object
+            ni.put("use", item.getName());
+            ni.remove("name");
+        } else {
+            // ah, cloning an existing item
+            ni.putAll(item);
+            ni.remove(item.getNameField());
+        }
+        System.out.print("Enter a new name: ");
+        String name = bfr.readLine();
+        if (name == null) {
+            // user pressed ^D I guess.
+            System.exit(0);
+        }
+        // blech, this is hacky
+        if (item.type == Types.service) {
+            ni.put("service_description", name);
+        } else {
+            ni.put(item.type.toString() + "_name", name);
+        }
+        // crash if the below returns null -- major weird stuff going on!
+        nagDb.get(item.type).add(ni);
+        ni.collectChildren();
+        stack.clear();
+        item = ni;
+        ls("ls -rd");
     }
 }
