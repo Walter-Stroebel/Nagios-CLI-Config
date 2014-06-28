@@ -4,6 +4,8 @@
  */
 package nl.infcomtec.nagclicfg;
 
+import java.util.TreeMap;
+
 public class Service extends NoDepNagItem {
 
     @Override
@@ -33,6 +35,15 @@ public class Service extends NoDepNagItem {
 
     public Service(NagCliCfg owner) {
         super(owner, Types.service);
+    }
+
+    @Override
+    public TreeMap<String, String> getAllFields() {
+        TreeMap<String, String> ret = new TreeMap<>(super.getAllFields());
+        if (containsKey("use")){
+            ret.putAll(owner.get(Types.service, get("use")));
+        }
+        return ret;
     }
 
 }

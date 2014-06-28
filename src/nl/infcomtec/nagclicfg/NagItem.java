@@ -29,6 +29,16 @@ public abstract class NagItem extends TreeMap<String, String> {
     }
 
     /**
+     * Returns all the fields (long listing) by including fields from templates
+     * and referrals.
+     *
+     * @return Fields in this object along with fields from 'use' templates.
+     */
+    public TreeMap<String, String> getAllFields() {
+        return this;
+    }
+
+    /**
      * @return the type
      */
     public Types getType() {

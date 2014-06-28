@@ -4,6 +4,8 @@
  */
 package nl.infcomtec.nagclicfg;
 
+import java.util.TreeMap;
+
 public class Host extends NoDepNagItem {
 
     @Override
@@ -46,6 +48,15 @@ public class Host extends NoDepNagItem {
 
     public Host(NagCliCfg owner) {
         super(owner, Types.host);
+    }
+
+    @Override
+    public TreeMap<String, String> getAllFields() {
+        TreeMap<String, String> ret = new TreeMap<>(super.getAllFields());
+        if (containsKey("use")){
+            ret.putAll(owner.get(Types.host, get("use")));
+        }
+        return ret;
     }
 
 }

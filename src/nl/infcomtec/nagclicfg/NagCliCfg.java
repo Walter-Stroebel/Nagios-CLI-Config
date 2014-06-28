@@ -12,8 +12,12 @@ import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Stack;
@@ -64,10 +68,11 @@ public class NagCliCfg {
                 System.exit(1);
             }
         } else {
-            // config.setProperty("nagios.cache", "/var/cache/nagios3/objects.cache");
+            config.setProperty("nagios.cache", "/var/cache/nagios3/objects.cache");
             config.setProperty("nagios.binary", "/usr/sbin/nagios3");
             config.setProperty("nagios.config", "/etc/nagios3/nagios.cfg");
             config.setProperty("sudo.ask-pass", "/usr/bin/ssh-askpass");
+            config.setProperty("terminal.width", "100");
             System.err.println("No configuration found. Below is a sample property file.");
             System.err.println("Adjust as needed and save as " + System.getProperty("user.home") + "/.nagclicfg");
             try {
@@ -77,6 +82,7 @@ public class NagCliCfg {
             }
             System.exit(0);
         }
+        TERMiNAL_WIDTH = Integer.valueOf(config.getProperty("terminal.width", "100"));
         try {
             NagCliCfg cfg = new NagCliCfg();
             try (BufferedReader main = new BufferedReader(new FileReader(config.getProperty("nagios.config")))) {
@@ -139,6 +145,10 @@ public class NagCliCfg {
                     System.out.println("help: you are reading it.");
                     System.out.println("cd: move around in the configuration, use [ls] for suggestions.");
                     System.out.println("ls: list the current object or group.");
+                    System.out.println("    -l (long) show more data (1 item per line)");
+                    System.out.println("    -r (refs) also show data from referrals");
+                    System.out.println("    -s (sort) sort the output");
+                    System.out.println("    -d (dns, implies -l) attempt to resolve the 'address' field (may be slow)");
                     System.out.println("sudo_check: run nagios -v config_file using sudo.");
                     System.out.println("check: run nagios -v config_file without sudo (being root already).");
                     System.out.println("find: find any named object or group.");
@@ -170,26 +180,8 @@ public class NagCliCfg {
                     } catch (InterruptedException ex) {
                         // no need to wait any longer?
                     }
-                } else if (cmd.equals("ls")) {
-                    if (dir == null) {
-                        for (Types t : Types.values()) {
-                            System.out.println(t);
-                        }
-                    } else if (item == null) {
-                        ArrayList<NagItem> col = nagDb.get(dir);
-                        if (col != null) {
-                            for (NagItem e : col) {
-                                System.out.println(e.getName());
-                            }
-                        }
-                    } else {
-                        for (Map.Entry<String, String> e : item.entrySet()) {
-                            System.out.println(e.getKey() + " " + e.getValue());
-                        }
-                        for (NagPointer c : item.children) {
-                            System.out.println(c.key + " --> " + c.item.getName());
-                        }
-                    }
+                } else if (cmd.startsWith("ls")) {
+                    ls(cmd);
                 } else if (cmd.startsWith("find ")) {
                     find("/", nagDb, cmd.substring(4).trim());
                 } else if (cmd.startsWith("set")) {
@@ -208,6 +200,151 @@ public class NagCliCfg {
             }
         }
     }
+
+    /**
+     * List data.
+     *
+     * @param cmd Options: -l, -r, -s
+     */
+    private void ls(String cmd) {
+        StringTokenizer opts = new StringTokenizer(cmd.substring(2), " -\t");
+        boolean oLong = false;
+        boolean oSort = false;
+        boolean oRecr = false;
+        boolean oDNS = false;
+        while (opts.hasMoreTokens()) {
+            for (char c : opts.nextToken().toLowerCase().toCharArray()) {
+                if (c == 'l') {
+                    oLong = true;
+                } else if (c == 's') {
+                    oSort = true;
+                } else if (c == 'r') {
+                    oRecr = true;
+                } else if (c == 'd') {
+                    oDNS = true;
+                    oLong = true;
+                } else {
+                    System.out.println("Unknown option " + c + " for ls");
+                    return;
+                }
+            }
+        }
+        ArrayList<String[]> grid = new ArrayList<>();
+        if (dir == null) {
+            for (Types t : Types.values()) {
+                grid.add(new String[]{t.toString(), Integer.toString(nagDb.get(t).size())});
+            }
+        } else if (item == null) {
+            ArrayList<NagItem> col = nagDb.get(dir);
+            if (col != null) {
+                for (NagItem e : col) {
+                    grid.add(new String[]{e.getName(), e.getNameField().equals("name") ? "generic" : "regular"});
+                }
+            }
+        } else {
+            if (oRecr) {
+                for (Map.Entry<String, String> e : item.getAllFields().entrySet()) {
+                    if (oDNS && e.getKey().equals("address")) {
+                        try {
+                            InetAddress a = InetAddress.getByName(e.getValue());
+                            grid.add(new String[]{e.getKey(), e.getValue() + " Addr=" + a.getHostAddress() + " (" + a.getCanonicalHostName() + ")"});
+                        } catch (UnknownHostException unknown) {
+                            grid.add(new String[]{e.getKey(), e.getValue() + " (DNS failed)"});
+                        }
+                    } else {
+                        grid.add(new String[]{e.getKey(), e.getValue()});
+                    }
+                }
+            } else {
+                for (Map.Entry<String, String> e : item.entrySet()) {
+                    if (oDNS && e.getKey().equals("address")) {
+                        try {
+                            InetAddress a = InetAddress.getByName(e.getValue());
+                            grid.add(new String[]{e.getKey(), e.getValue() + " Addr=" + a.getHostAddress() + " (" + a.getCanonicalHostName() + ")"});
+                        } catch (UnknownHostException unknown) {
+                            grid.add(new String[]{e.getKey(), e.getValue() + " (DNS failed)"});
+                        }
+                    } else {
+                        grid.add(new String[]{e.getKey(), e.getValue()});
+                    }
+                }
+            }
+            if (oRecr) {
+                for (NagPointer c : item.children) {
+                    grid.add(new String[]{c.key, "--> " + c.item.getName()});
+                }
+            }
+        }
+        if (oSort) {
+            Collections.sort(grid, new Comparator<String[]>() {
+
+                @Override
+                public int compare(String[] o1, String[] o2) {
+                    for (int i = 0; i < o1.length && i < o2.length; i++) {
+                        int c = o1[i].compareToIgnoreCase(o2[i]);
+                        if (c != 0) {
+                            return c;
+                        }
+                    }
+                    return Integer.compare(o1.length, o2.length);
+                }
+            });
+        }
+        int m0 = 0;
+        for (String[] e : grid) {
+            if (e[0] != null) {
+                m0 = Math.max(m0, e[0].length());
+            }
+        }
+        if (m0 > 0) {
+            if (!oLong) {
+                int c = TERMiNAL_WIDTH / (m0 + 1);
+                if (c == 0) {
+                    c = 1;
+                }
+                String fmt = "%-" + (TERMiNAL_WIDTH / c) + "s";
+                for (int i = 0; i < grid.size(); i += c) {
+                    String sep = "";
+                    for (int j = 0; j < c && (i + j) < grid.size(); j++) {
+                        System.out.print(sep);
+                        sep = " ";
+                        System.out.format(fmt, grid.get(i + j)[0]);
+                    }
+                    System.out.println();
+                }
+            } else {
+                if (m0 > TERMiNAL_WIDTH / 2) {
+                    m0 = TERMiNAL_WIDTH / 2;
+                }
+                int m1 = TERMiNAL_WIDTH - m0 - 2;
+                String fmt = "%-" + m0 + "s ";
+                StringBuilder rep = new StringBuilder(String.format(fmt, "").replace("  "," .")).reverse();
+                for (String[] e : grid) {
+                    String k = e[0];
+                    if (k.length() > m0) {
+                        k = k.substring(0, m0);
+                    }
+                    StringBuilder sb = new StringBuilder(String.format(fmt, k));
+                    sb = new StringBuilder(sb.reverse().toString().replace("  ", " ."));
+                    System.out.print(sb.reverse());
+                    String v = e[1];
+                    while (true) {
+                        if (v.length() > m1) {
+                            System.out.println(v.substring(0, m1));
+                            v = v.substring(m1);
+                            System.out.print(rep);
+                        } else {
+                            System.out.println(v);
+                            break;
+                        }
+                    }
+                }
+            }
+        } else {
+            System.out.println("Nothing found to list?" + grid);
+        }
+    }
+    public static int TERMiNAL_WIDTH = 100;
 
     private void set(String nvp, boolean ifExists) {
         String[] two = splitNVP(nvp);
@@ -272,7 +409,7 @@ public class NagCliCfg {
         for (NagItem e1 : all) {
             for (NagPointer e2 : e1.children) {
                 if (e2.item.getName().equals(from)) {
-                    System.out.print("Old name is refered to in field '" + e2.key + "' in object '" + e1.getType() + "." + e1.getName()+"'");
+                    System.out.print("Old name is refered to in field '" + e2.key + "' in object '" + e1.getType() + "." + e1.getName() + "'");
                     String[] split = e1.get(e2.key).split(",");
                     String sep = "";
                     StringBuilder rep = new StringBuilder();
