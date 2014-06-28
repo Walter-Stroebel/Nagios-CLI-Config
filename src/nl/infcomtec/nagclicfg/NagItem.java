@@ -4,7 +4,10 @@
  */
 package nl.infcomtec.nagclicfg;
 
+import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.TreeMap;
 
 /**
@@ -100,5 +103,25 @@ public abstract class NagItem extends TreeMap<String, String> {
             case servicegroup:
                 return new ServiceGroup(owner);
         }
+    }
+
+    public void dump(PrintWriter out, boolean withReferals) {
+        out.println("define " + getType().toString() + " {");
+        if (withReferals) {
+            for (Map.Entry<String, String> e2 : getAllFields().entrySet()) {
+                out.println("\t" + e2.getKey() + "\t" + e2.getValue());
+            }
+        } else {
+            for (Map.Entry<String, String> e2 : entrySet()) {
+                out.println("\t" + e2.getKey() + "\t" + e2.getValue());
+            }
+        }
+        out.println("}");
+    }
+
+    public void dump(OutputStream out, boolean withReferals) {
+        PrintWriter pw = new PrintWriter(out);
+        dump(pw, withReferals);
+        pw.flush();
     }
 }

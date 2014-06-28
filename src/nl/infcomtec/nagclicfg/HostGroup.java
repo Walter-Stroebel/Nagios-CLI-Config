@@ -23,6 +23,12 @@ public class HostGroup extends NoDepNagItem {
                 }
             }
         }
+        {
+            NagItem c = owner.get(Types.hostextinfo, getName());
+            if (c != null) {
+                children.add(new NagPointer(getNameField(), c));
+            }
+        }
     }
 
 }

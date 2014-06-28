@@ -1,0 +1,44 @@
+Here is a dump of an object from the Nagios cache.
+Note the use of the -q option to suppress the banner and the prompts.
+
+walter@home:~$ java -jar NagCliCfg.jar -q << EOF
+cd /host/snom320
+dump
+EOF
+
+define host {
+        active_checks_enabled   1
+        address snom320
+        check_command   check-host-alive
+        check_freshness 0
+        check_interval  5.000000
+        contact_groups  admins
+        event_handler_enabled   1
+        failure_prediction_enabled      1
+        first_notification_delay        0.000000
+        flap_detection_enabled  1
+        flap_detection_options  o,d,u
+        freshness_threshold     0
+        high_flap_threshold     0.000000
+        host_name       snom320
+        icon_image      internet_device.png
+        icon_image_alt  Phones
+        initial_state   o
+        low_flap_threshold      0.000000
+        max_check_attempts      10
+        notes   Phones
+        notification_interval   0.000000
+        notification_options    d,u,r
+        notification_period     24x7
+        notifications_enabled   1
+        obsess_over_host        1
+        parents medion9
+        passive_checks_enabled  1
+        process_perf_data       1
+        retain_nonstatus_information    1
+        retain_status_information       1
+        retry_interval  1.000000
+        stalking_options        n
+        statusmap_image internet_device.png
+        vrml_image      logos/internet_device.png
+}
