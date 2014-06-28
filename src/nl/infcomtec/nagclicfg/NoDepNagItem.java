@@ -6,6 +6,10 @@ package nl.infcomtec.nagclicfg;
 
 import java.util.Map;
 
+/** For basic objects.
+ *
+ * @author walter
+ */
 public class NoDepNagItem extends NagItem {
 
     @Override

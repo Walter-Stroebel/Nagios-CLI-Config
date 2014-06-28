@@ -85,7 +85,8 @@ public class NagCliCfg {
         TERMiNAL_WIDTH = Integer.valueOf(config.getProperty("terminal.width", "100"));
         try {
             NagCliCfg cfg = new NagCliCfg();
-            try (BufferedReader main = new BufferedReader(new FileReader(config.getProperty("nagios.config")))) {
+            File nagCfgFile = new File(config.getProperty("nagios.config"));
+            try (BufferedReader main = new BufferedReader(new FileReader(nagCfgFile))) {
                 for (String fnd = main.readLine(); fnd != null; fnd = main.readLine()) {
                     fnd = fnd.trim();
                     if (fnd.startsWith("#")) {
@@ -98,11 +99,14 @@ public class NagCliCfg {
                         int idx = fnd.indexOf('=');
                         if (idx > 0) {
                             File f = new File(fnd.substring(idx + 1).trim());
+                            if (!f.exists()){
+                                f = new File(nagCfgFile.getParentFile(), fnd.substring(idx + 1).trim());
+                            }
                             if (f.exists()) {
                                 cfg.read(f);
                                 cfg.files.add(f);
                             } else {
-                                System.err.println("File not found " + config.getProperty("nagios.config") + ": " + fnd);
+                                System.err.println("File not found " + config.getProperty("nagios.config") + ": " + f);
                             }
                         } else {
                             System.err.println("Bad directive in " + config.getProperty("nagios.config") + ": " + fnd);
@@ -111,6 +115,9 @@ public class NagCliCfg {
                         int idx = fnd.indexOf('=');
                         if (idx > 0) {
                             File dir = new File(fnd.substring(idx + 1).trim());
+                            if (!dir.exists()){
+                                dir = new File(nagCfgFile.getParentFile(), fnd.substring(idx + 1).trim());
+                            }
                             if (dir.exists()) {
                                 for (File f : dir.listFiles(
                                         new FilenameFilter() {
@@ -124,7 +131,7 @@ public class NagCliCfg {
                                 }
                                 cfg.files.add(dir);
                             } else {
-                                System.err.println("Directory not found " + config.getProperty("nagios.config") + ": " + fnd);
+                                System.err.println("Directory not found " + config.getProperty("nagios.config") + ": " + dir);
                             }
                         } else {
                             System.err.println("Bad directive in " + config.getProperty("nagios.config") + ": " + fnd);
@@ -242,7 +249,11 @@ public class NagCliCfg {
         ArrayList<String[]> grid = new ArrayList<>();
         if (dir == null) {
             for (Types t : Types.values()) {
-                grid.add(new String[]{t.toString(), Integer.toString(nagDb.get(t).size())});
+                if (nagDb.get(t) != null) {
+                    grid.add(new String[]{t.toString(), Integer.toString(nagDb.get(t).size())});
+                } else {
+                    grid.add(new String[]{t.toString(), "0"});
+                }
             }
         } else if (item == null) {
             ArrayList<NagItem> col = nagDb.get(dir);
@@ -770,6 +781,8 @@ public class NagCliCfg {
         // blech, this is hacky
         if (item.type == Types.service) {
             ni.put("service_description", name);
+        } else if (item.type == Types.hostextinfo){
+            ni.put("hostgroup_name", name);
         } else {
             ni.put(item.type.toString() + "_name", name);
         }

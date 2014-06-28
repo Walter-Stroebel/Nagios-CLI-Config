@@ -91,6 +91,8 @@ public abstract class NagItem extends TreeMap<String, String> {
                 return new ContactGroup(owner);
             case host:
                 return new Host(owner);
+            case hostextinfo:
+                return new HostExtInfo(owner);
             case hostgroup:
                 return new HostGroup(owner);
             case service:
