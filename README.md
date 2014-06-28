@@ -3,10 +3,10 @@ Nagios-CLI-Config
 
 Command line (sort of) configuration of Nagios.
 
-2014-06-27: Release early, release often.
-2014-06-28: Beta version, it works for me!
+- 2014-06-27: Release early, release often.
+- 2014-06-28: Beta version, it works for me!
 
-What works (also see the demo-session):
+What works:
 
 - cd to groups, hosts, services.
 - ls the data and/or members.
@@ -16,6 +16,9 @@ What works (also see the demo-session):
 - Write the changed configuration to neatly formatted files, one per object type (host.cfg, service.cfg, ...)
 - find any named object (by substring) in the entire configuration. 
 - Fully configurable for where things live.
+- diff with Nagios raw objects.
+- export cooked object.
+- dump raw object.
 
 TODO:
 =====
