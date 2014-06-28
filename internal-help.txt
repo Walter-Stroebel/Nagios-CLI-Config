@@ -1,0 +1,49 @@
+Here is the internal help, listing the commands.
+Also a few simple commands, listing info about a phone device.
+
+walter@home:~$ walter@medion:~$ java -jar NagCliCfg.jar
+Nagios command-line configurator.
+Objects loaded from [/etc/nagios3/nagclicfg.d]
+Type 'help' for some assistance.
+/> help
+add: add a value to the current object (see also 'set').
+cd: move around in the configuration, use [ls] for suggestions.
+check: run 'nagios -v config_file' (do this after write!)
+clone: Clones the current object.
+diff: compare object to Nagios cached object (expect some differences).
+dump: Raw dump of the current object.
+export: Export the current object (using generics).
+reload: Make Nagios reload the config (write and check first!)
+rm: Delete the current object.
+find: find any named object or group.
+help: you are reading it.
+ls: list the current object or group.
+    -l (long) show more data (1 item per line)
+    -r (refs, implies -l) also show data from referrals
+    -s (sort) sort the output
+    -d (dns, implies -l) attempt to resolve the 'address' field (may be slow)
+quit, exit or ^D: exit the program.
+set: set a value in the current object to a new value (see also 'add').
+write: write the entire config to /tmp/nagios.big (one file).
+/> ls
+command       contact       contactgroup  host          hostgroup     service      
+servicegroup  timeperiod    hostextinfo  
+/> ls -l
+command. . . 154
+contact. . . 1
+contactgroup 1
+host . . . . 21
+hostgroup. . 7
+service. . . 8
+servicegroup 1
+timeperiod . 4
+hostextinfo. 3
+/> cd host/snom320
+/host/snom320> ls -d
+address. . snom320 Addr=10.9.0.3 (snom320)
+host_name. snom320
+hostgroups phones
+parents. . phone-router
+use. . . . generic-host
+/host/snom320> 
+
