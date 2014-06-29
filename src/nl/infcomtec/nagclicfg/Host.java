@@ -17,7 +17,7 @@ public class Host extends NoDepNagItem {
         addChild(children, "use", Types.host);
         NagItem c = owner.get(Types.hostextinfo, getName());
         if (c != null) {
-            children.add(new NagPointer(getNameField(), c));
+            children.add(new NagPointer(getNameFields()[0], c));
         }
         return children;
     }

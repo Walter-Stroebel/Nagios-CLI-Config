@@ -5,21 +5,20 @@
 package nl.infcomtec.nagclicfg;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Iterator;
 import java.util.TreeMap;
-import java.util.TreeSet;
 
 public class Service extends NoDepNagItem {
 
     @Override
-    public String getNameField() {
-        if (containsKey("service_description")) {
-            return "service_description";
+    public String[] getNameFields() {
+        if (containsKey("service_description")&&containsKey("host_name")) {
+            // as used as key by service_groups
+            return new String[]{"host_name","service_description"};
         }
-        return super.getNameField();
+        if (containsKey("hostgroup_name")){
+            return new String[]{"hostgroup_name"};
+        }
+        return super.getNameFields();
     }
 
     @Override
@@ -27,11 +26,8 @@ public class Service extends NoDepNagItem {
         ArrayList<NagPointer> children = super.getChildren();
         children.addAll(getChildren("hostgroups", Types.hostgroup));
         addChild(children, "host_name", Types.host);
+        addChild(children, "hostgroup_name", Types.hostgroup);
         addChild(children, "use", Types.service);
-        NagItem c = owner.get(Types.hostextinfo, getName());
-        if (c != null) {
-            children.add(new NagPointer(getNameField(), c));
-        }
         return children;
     }
 

@@ -36,7 +36,7 @@ public class NagCliCfg {
 
     public final static Properties config = new Properties();
 
-    public final TreeMap<Types, ArrayList<NagItem>> nagDb = new TreeMap<>();
+    public final TreeMap<Types, TreeMap<String, NagItem>> nagDb = new TreeMap<>();
     public final ArrayList<NagItem> all = new ArrayList<>();
     public final ArrayList<File> files = new ArrayList<>();
 
@@ -47,13 +47,9 @@ public class NagCliCfg {
     private ArrayList<String> args;
 
     public NagItem get(Types type, String name) {
-        ArrayList<NagItem> items = nagDb.get(type);
+        TreeMap<String, NagItem> items = nagDb.get(type);
         if (items != null) {
-            for (NagItem itm : items) {
-                if (itm.getName() != null && itm.getName().equals(name)) {
-                    return itm;
-                }
-            }
+            return items.get(name);
         }
         return null;
     }
@@ -257,7 +253,7 @@ public class NagCliCfg {
                 }
             }
         }
-        if (_echo&&ret!=null) {
+        if (_echo && ret != null) {
             System.out.println(ret);
         }
         return ret;
@@ -506,10 +502,10 @@ public class NagCliCfg {
                 }
             }
         } else if (item == null) {
-            ArrayList<NagItem> col = nagDb.get(dir);
+            TreeMap<String, NagItem> col = nagDb.get(dir);
             if (col != null) {
-                for (NagItem e : col) {
-                    grid.add(new String[]{e.getName(), e.getNameField().equals("name") ? "generic" : "regular"});
+                for (NagItem e : col.values()) {
+                    grid.add(new String[]{e.getName(), e.getNameFields()[0].equals("name") ? "generic" : "regular"});
                 }
             }
         } else {
@@ -629,16 +625,17 @@ public class NagCliCfg {
             if (oldVal != null && oldVal.equals(val)) {
                 return false;
             }
-            if (key.equals(item.getNameField())) {
-                rename(item.get(key), val);
-                System.out.println("Changing '" + key + "' from '" + oldVal + "' to '" + val + "'");
-                item.put(key, val);
-                return true;
-            } else {
-                System.out.println("Changing '" + key + "' from '" + oldVal + "' to '" + val + "'");
-                item.put(key, val);
-                return true;
+            for (String nf : item.getNameFields()) {
+                if (key.equals(nf)) {
+                    rename(item.get(key), val);
+                    System.out.println("Changing '" + key + "' from '" + oldVal + "' to '" + val + "'");
+                    item.put(key, val);
+                    return true;
+                }
             }
+            System.out.println("Changing '" + key + "' from '" + oldVal + "' to '" + val + "'");
+            item.put(key, val);
+            return true;
         } else if (!ifExists && !item.containsKey(key)) {
             System.out.println("Adding '" + key + "' as '" + val + "'");
             item.put(key, val);
@@ -793,9 +790,9 @@ public class NagCliCfg {
             files.clear();
             files.add(cfgDir);
         }
-        for (Map.Entry<Types, ArrayList<NagItem>> cfg : nagDb.entrySet()) {
+        for (Map.Entry<Types, TreeMap<String, NagItem>> cfg : nagDb.entrySet()) {
             try (PrintWriter out = new PrintWriter(new File(cfgDir, cfg.getKey().toString() + ".cfg"))) {
-                for (NagItem e : cfg.getValue()) {
+                for (NagItem e : cfg.getValue().values()) {
                     e.dump(out, false);
                 }
             } catch (FileNotFoundException ex) {
@@ -841,7 +838,7 @@ public class NagCliCfg {
                         return false;
                     }
                 } else if (item == null) {
-                    for (NagItem e : nagDb.get(dir)) {
+                    for (NagItem e : nagDb.get(dir).values()) {
                         if (part.endsWith(e.getName())) {
                             item = e;
                             break;
@@ -937,12 +934,10 @@ public class NagCliCfg {
                     } catch (Exception oops) {
                         continue;
                     }
-                    ArrayList<NagItem> items = nagDb.get(what);
+                    TreeMap<String, NagItem> items = nagDb.get(what);
                     if (items == null) {
-                        nagDb.put(what, items = new ArrayList<>());
+                        nagDb.put(what, items = new TreeMap<>());
                     }
-                    items.add(itm);
-                    all.add(itm);
                     for (String s2 = bfr.readLine(); s2 != null; s2 = bfr.readLine()) {
                         s2 = s2.trim();
                         if (s2.startsWith("#")) {
@@ -952,10 +947,16 @@ public class NagCliCfg {
                             continue;
                         }
                         if (s2.equals("}")) {
-                            if (itm.getNameField() == null || itm.getName() == null) {
+                            if (itm.getNameFields().length == 0 || itm.getName() == null) {
                                 System.err.println("Fatal error for " + itm + "; cannot handle unnamed items.");
                                 System.exit(1);
                             }
+                            if (items.containsKey(itm.getName())) {
+                                System.err.println("Unable to load configuration; duplicate items:\n" + itm + "\nand:\n" + item);
+                                System.exit(1);
+                            }
+                            items.put(itm.getName(), itm);
+                            all.add(itm);
                             break;
                         }
                         //System.out.println(s2);
@@ -981,33 +982,30 @@ public class NagCliCfg {
 
     private void cloneObject() throws IOException {
         NagItem ni = NagItem.construct(this, item.getType());
-        if (item.getNameField().equals("name")) {
+        if (item.getNameFields()[0].equals("name")) {
             // kewl, cloning a generic object
             ni.put("use", item.getName());
             ni.remove("name");
         } else {
             // ah, cloning an existing item
             ni.putAll(item);
-            ni.remove(item.getNameField());
         }
-        String name = readLine("Enter a new name: ");
-        if (name == null) {
-            return;
-        }
-        // blech, this is hacky
-        if (item.type == Types.service) {
-            ni.put("service_description", name);
-        } else if (item.type == Types.hostextinfo) {
-            ni.put("hostgroup_name", name);
-        } else {
-            ni.put(item.type.toString() + "_name", name);
-        }
-        if (ni.getNameField() == null || ni.getName() == null) {
-            System.err.println("Fatal error cloning " + ni + "; managed to create a unnamed item.");
-            System.exit(1);
+        while (true) {
+            for (String s : ni.getNameFields()) {
+                String name = readLine("Enter a new value for " + s + ": ");
+                if (name == null) {
+                    return;
+                }
+                ni.put(s, name);
+            }
+            if (nagDb.get(item.getType()).containsKey(ni.getName())) {
+                System.err.println("Duplicate name!");
+            } else {
+                break;
+            }
         }
         // the below should never return null so let Java throw the exception if major weird stuff is going on!
-        nagDb.get(item.type).add(ni);
+        nagDb.get(item.type).put(ni.getName(), ni);
         stack.clear();
         item = ni;
         if (!_quiet || _echo) {

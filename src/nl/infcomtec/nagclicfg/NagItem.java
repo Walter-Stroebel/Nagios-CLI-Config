@@ -59,19 +59,24 @@ public abstract class NagItem extends TreeMap<String, String> {
      * @return Unique ID
      */
     public final String getName() {
-        if (getNameField() != null) {
-            return get(getNameField());
+        String ret = null;
+        for (String s : getNameFields()) {
+            if (ret == null) {
+                ret = get(s);
+            } else {
+                ret = ret + "," + get(s);
+            }
         }
-        return "Object has no name!";
+        return ret == null ? "Object has no name!" : ret;
     }
 
     /**
      * Returns the field used to define the name of this object.
      *
      * @return Usually '(type)_name', or 'name' for generic objects or
-     * 'service_description' for a named service.
+     * 'service_description','host_name' for a named service.
      */
-    public abstract String getNameField();
+    public abstract String[] getNameFields();
 
     /**
      * Must be implemented to read fields like parent, host_name in service and
@@ -175,9 +180,9 @@ public abstract class NagItem extends TreeMap<String, String> {
         TreeSet<String> mems;
         if (asterisk.trim().equals("*")) {
             mems = new TreeSet<>();
-            ArrayList<NagItem> l = owner.nagDb.get(memType);
+            TreeMap<String,NagItem> l = owner.nagDb.get(memType);
             if (l != null) {
-                for (NagItem e : l) {
+                for (NagItem e : l.values()) {
                     mems.add(e.getName());
                 }
             }

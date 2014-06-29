@@ -18,7 +18,7 @@ public class HostGroup extends NoDepNagItem {
         children.addAll(members(Types.host));
         NagItem c = owner.get(Types.hostextinfo, getName());
         if (c != null) {
-            children.add(new NagPointer(getNameField(), c));
+            children.add(new NagPointer(getNameFields()[0], c));
         }
         return children;
     }

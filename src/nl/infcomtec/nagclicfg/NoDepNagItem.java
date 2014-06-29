@@ -44,11 +44,12 @@ public class NoDepNagItem extends NagItem {
     }
 
     @Override
-    public String getNameField() {
+    public String[] getNameFields() {
         String fNam = type.toString() + "_name";
-        if (containsKey(fNam)) return fNam;
-        if (containsKey("name")) return "name";
-        return null;
+        if (containsKey(fNam)) return new String[]{fNam};
+        if (containsKey("name")) return new String[]{"name"};
+        System.err.println(this);
+        throw new RuntimeException("Fatal: NagItem does not know how to name itself");
     }
 
 }
