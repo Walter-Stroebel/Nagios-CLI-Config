@@ -4,6 +4,7 @@
  */
 package nl.infcomtec.nagclicfg;
 
+import java.util.ArrayList;
 import java.util.Map;
 
 /** For basic objects.
@@ -13,7 +14,8 @@ import java.util.Map;
 public class NoDepNagItem extends NagItem {
 
     @Override
-    public void collectChildren() {
+    public ArrayList<NagPointer> getChildren() {
+        ArrayList<NagPointer> children = new ArrayList<>();
         for (Types t : Types.values()) {
             for (Map.Entry<String, String> e : entrySet()) {
                 String refAs = t.toString();
@@ -28,6 +30,7 @@ public class NoDepNagItem extends NagItem {
                 }
             }
         }
+        return children;
     }
 
     /**

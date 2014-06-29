@@ -4,6 +4,8 @@
  */
 package nl.infcomtec.nagclicfg;
 
+import java.util.ArrayList;
+
 public class ContactGroup extends NoDepNagItem {
 
     public ContactGroup(NagCliCfg owner) {
@@ -11,18 +13,11 @@ public class ContactGroup extends NoDepNagItem {
     }
 
     @Override
-    public void collectChildren() {
-        super.collectChildren();
-        String members = get("members");
-        if (members != null) {
-            String[] mems = members.split(",");
-            for (String mem : mems) {
-                NagItem c = owner.get(Types.contact, mem);
-                if (c != null) {
-                    children.add(new NagPointer("members", c));
-                }
-            }
-        }
+    public ArrayList<NagPointer> getChildren() {
+        ArrayList<NagPointer> children = 
+        super.getChildren();
+        children.addAll(super.members(Types.contact));
+        return children;
     }
 
 }

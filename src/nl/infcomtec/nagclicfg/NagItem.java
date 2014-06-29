@@ -9,6 +9,7 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 /**
  *
@@ -17,7 +18,6 @@ import java.util.TreeMap;
 public abstract class NagItem extends TreeMap<String, String> {
 
     protected final Types type;
-    public final ArrayList<NagPointer> children = new ArrayList<>();
     protected final NagCliCfg owner;
 
     /**
@@ -50,7 +50,7 @@ public abstract class NagItem extends TreeMap<String, String> {
 
     @Override
     public String toString() {
-        return "\nNagItem{" + "type=" + type + "\n" + super.toString() + "\nChildren: " + children + "\n}";
+        return "\nNagItem{" + "type=" + type + "\n" + super.toString() + "\nChildren: " + NagItem.this.getChildren() + "\n}";
     }
 
     /**
@@ -75,9 +75,9 @@ public abstract class NagItem extends TreeMap<String, String> {
 
     /**
      * Must be implemented to read fields like parent, host_name in service and
-     * members.
+     * getChildren.
      */
-    public abstract void collectChildren();
+    public abstract ArrayList<NagPointer> getChildren();
 
     /**
      * Construct the proper object.
@@ -123,5 +123,102 @@ public abstract class NagItem extends TreeMap<String, String> {
         PrintWriter pw = new PrintWriter(out);
         dump(pw, withReferals);
         pw.flush();
+    }
+
+    /**
+     * Convert a field of form value,value,...,value to a TreeSet.
+     *
+     * @param fieldName Field to fetch.
+     * @return TreeSet, possibly empty.
+     */
+    public TreeSet<String> fieldToSet(String fieldName) {
+        TreeSet<String> ret = new TreeSet<>();
+        String members = get(fieldName);
+        if (members != null) {
+            String[] mems = members.split(",");
+            for (String mem : mems) {
+                ret.add(mem.trim());
+            }
+        }
+        return ret;
+    }
+
+    /**
+     * Convert a set to a field of form value,value,...,value.
+     *
+     * @param set To convert.
+     * @return Field value of form value,value,...,value.
+     */
+    public String setToField(TreeSet<String> set) {
+        StringBuilder sb = new StringBuilder();
+        String sep = "";
+        for (String s : set) {
+            sb.append(sep).append(s);
+            sep = ",";
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Get the children from a field of form value,value,...,value.
+     *
+     * @param fieldName Field to fetch.
+     * @param memType Type of child this points to.
+     * @return List of children, possible empty.
+     */
+    public ArrayList<NagPointer> getChildren(String fieldName, Types memType) {
+        ArrayList<NagPointer> children = new ArrayList<>();
+        String asterisk = get(fieldName);
+        if (asterisk == null) {
+            return children;
+        }
+        TreeSet<String> mems;
+        if (asterisk.trim().equals("*")) {
+            mems = new TreeSet<>();
+            ArrayList<NagItem> l = owner.nagDb.get(memType);
+            if (l != null) {
+                for (NagItem e : l) {
+                    mems.add(e.getName());
+                }
+            }
+        } else {
+            mems = fieldToSet(fieldName);
+        }
+        for (String mem : mems) {
+            NagItem c = owner.get(memType, mem.trim());
+            if (c != null) {
+                children.add(new NagPointer(fieldName, c));
+            }
+        }
+        return children;
+    }
+
+    /**
+     * Add a child pointed to by a single-value field, eg 'use'. Does nothing if
+     * the field does not exist or the referred item does not exist.
+     *
+     * @param children Child collection to add to.
+     * @param fieldName Name of the field.
+     * @param memType Type of the item it is pointing to.
+     */
+    public void addChild(ArrayList<NagPointer> children, String fieldName, Types memType) {
+        String key = get(fieldName);
+        if (key != null) {
+            NagItem c = owner.get(memType, key.trim());
+            if (c != null) {
+                children.add(new NagPointer(fieldName, c));
+            }
+        }
+    }
+
+    /**
+     * Get the children from the 'getChildren' field of form
+     * value,value,...,value.
+     *
+     * @param memType Type of child this points to.
+     * @return List of children, possible empty.
+     */
+    public ArrayList<NagPointer> members(Types memType) {
+        return getChildren("members", memType);
     }
 }

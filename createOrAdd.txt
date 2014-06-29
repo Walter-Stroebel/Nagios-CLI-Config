@@ -1,0 +1,54 @@
+Sample run of simple script:
+walter@home: java -jar NagCliCfg.jar -q machine 1.2.3.4 <createOrAdd.ncc
+Adding 'address' as '1.2.3.4'
+Created new host 'machine', writing and reloading config
+address . 1.2.3.4
+host_name machine
+use . . . generic-host
+
+Again, this time with debug output
+walter@home: java -jar NagCliCfg.jar -q -e machine 1.2.3.4 <createOrAdd.ncc
+ignoring: (#)
+ignoring: (# Either create a new host with the name |%1%| and the address |%2%|)
+ignoring: (# or set the address of an existing host |%1%| to |%2%|)
+ignoring: (#)
+ifcd /host/machine
+ifset address 1.2.3.4
+echo Address changed, writing and reloading config
+ignoring: (# (demo) write)
+ignoring: (# (demo) reload)
+fi
+else
+cd /host/generic-host
+clone
+machine
+check_command. . . . . . . . check-host-alive
+contact_groups . . . . . . . admins
+event_handler_enabled. . . . 1
+failure_prediction_enabled . 1
+flap_detection_enabled . . . 1
+host_name. . . . . . . . . . machine
+max_check_attempts . . . . . 10
+name . . . . . . . . . . . . generic-host
+notification_interval. . . . 0
+notification_options . . . . d,u,r
+notification_period. . . . . 24x7
+notifications_enabled. . . . 1
+process_perf_data. . . . . . 1
+register . . . . . . . . . . 0
+retain_nonstatus_information 1
+retain_status_information. . 1
+use. . . . . . . . . . . . . generic-host
+use. . . . . . . . . . . . . --> generic-host
+add address 1.2.3.4
+Adding 'address' as '1.2.3.4'
+echo Created new host 'machine', writing and reloading config
+Created new host 'machine', writing and reloading config
+ignoring: (# show the result without recursion)
+ls -l
+address . 1.2.3.4
+host_name machine
+use . . . generic-host
+ignoring: (# (demo) write)
+ignoring: (# (demo) reload)
+fi

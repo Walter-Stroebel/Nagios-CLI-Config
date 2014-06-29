@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Stack;
@@ -40,7 +41,10 @@ public class NagCliCfg {
     public final ArrayList<File> files = new ArrayList<>();
 
     public final static NagCliCfg raw = new NagCliCfg();
-    public static boolean quiet = false;
+    public static boolean _quiet = false;
+    public static boolean _echo = false;
+    private BufferedReader input;
+    private ArrayList<String> args;
 
     public NagItem get(Types type, String name) {
         ArrayList<NagItem> items = nagDb.get(type);
@@ -57,13 +61,27 @@ public class NagCliCfg {
     /**
      * @param args the command line arguments
      */
-    public static void main(String[] args) {
-        for (String s : args) {
+    public static void main(String[] _args) {
+        ArrayList<String> args = new ArrayList<>(Arrays.asList(_args));
+        for (Iterator<String> it = args.iterator(); it.hasNext();) {
+            String s = it.next();
             if (s.equals("-q")) {
-                quiet = true;
-            } else {
-                System.err.println("Only one parameter: -q (quiet) to suppress printing the prompt and banner.");
-                System.exit(1);
+                _quiet = true;
+                it.remove();
+            } else if (s.equals("-e")) {
+                _echo = true;
+                it.remove();
+            } else if (s.equals("--")) {
+                it.remove();
+                break;
+            } else if (s.startsWith("-")) {
+                System.out.println("Usage: nagclicfg [parameter1,parameter2,...,parameterN]");
+                System.out.println("The parameters can be used in commands as |%1%|, |%2%|, ..., |%N%|");
+                System.out.println("These options are supported:");
+                System.out.println("  -- stop parsing options.");
+                System.out.println("  -q (quiet) to suppress printing the prompt and banner.");
+                System.out.println("  -e (echo) print commands as read.");
+                System.exit(0);
             }
         }
         boolean configOk = false;
@@ -152,173 +170,298 @@ public class NagCliCfg {
                     }
                 }
             }
-            for (NagItem itm : cfg.all) {
-                itm.collectChildren();
-            }
-            if (!quiet) {
+            if (!_quiet) {
                 System.out.println("Nagios command-line configurator.");
                 System.out.println("Objects loaded from " + cfg.files);
                 System.out.println("Type 'help' for some assistance.");
             }
-            cfg.cli();
+            try (BufferedReader bfr = new BufferedReader(new InputStreamReader(System.in))) {
+                cfg.run(bfr, args);
+            }
         } catch (IOException ex) {
             Logger.getLogger(NagCliCfg.class.getName()).log(Level.SEVERE, null, ex);
             System.exit(1);
         }
     }
 
+    /**
+     * Main processing loop.
+     *
+     * @param bfr Input.
+     * @param args Arguments
+     * @throws IOException If it does.
+     */
+    private void run(BufferedReader bfr, ArrayList<String> args) throws IOException {
+        this.input = bfr;
+        this.args = args;
+        while (input != null) {
+            String cmd = readLine(null);
+            if (cmd != null) {
+                cli(cmd);
+            }
+        }
+    }
+
+    /**
+     * Read a line of input.
+     *
+     * @param prompt Optional prompt.
+     * @return Next line or null on EOF.
+     * @throws IOException If it does.
+     */
+    private String readLine(String prompt) throws IOException {
+        if (input == null) {
+            return null;
+        }
+        if (!_quiet) {
+            if (prompt == null) {
+                System.out.print(getPath() + "> ");
+            } else {
+                System.out.print(prompt);
+            }
+            System.out.flush();
+        }
+        String ret = input.readLine();
+        if (ret == null) {
+            input = null;
+        } else {
+            ret = ret.trim();
+            if (ret.startsWith("#") || ret.startsWith(";") || ret.isEmpty()) {
+                if (_echo) {
+                    System.out.println("ignoring: (" + ret + ")");
+                }
+                return readLine(prompt);
+            }
+            int start = ret.indexOf("|%");
+            while (start >= 0) {
+                int end = ret.indexOf("%|", start);
+                if (end > start) {
+                    String spi = ret.substring(start + 2, end).trim();
+                    int pi = 0;
+                    try {
+                        pi = Integer.valueOf(spi);
+                    } catch (Exception oops) {
+                        // too bad
+                    }
+                    if (pi > 0 && pi <= args.size()) {
+                        pi--;
+                        ret = ret.substring(0, start) + args.get(pi) + ret.substring(end + 2);
+                        start = ret.indexOf("|%");
+                    } else {
+                        // abort, bad parameter
+                        start = -1;
+                    }
+                } else {
+                    // abort, bad parameter
+                    start = -1;
+                }
+            }
+        }
+        if (_echo&&ret!=null) {
+            System.out.println(ret);
+        }
+        return ret;
+    }
     private Types dir = null;
     private NagItem item = null;
     private final Stack<NagItem> stack = new Stack<>();
 
-    private void cli() throws IOException {
-        try (BufferedReader bfr = new BufferedReader(new InputStreamReader(System.in))) {
-            if (!quiet) {
-                System.out.print(getPath() + "> ");
-                System.out.flush();
-            }
-            for (String cmd = bfr.readLine(); cmd != null; cmd = bfr.readLine()) {
-                cmd = cmd.trim();
-                if (cmd.equals("help")) {
-                    System.out.println("add: add a value to the current object (see also 'set').");
-                    System.out.println("cd: move around in the configuration, use [ls] for suggestions.");
-                    System.out.println("check: run 'nagios -v config_file' (do this after write!)");
-                    System.out.println("clone: Clones the current object.");
-                    System.out.println("diff: compare object to Nagios cached object (expect some differences).");
-                    System.out.println("dump: Raw dump of the current object.");
-                    System.out.println("export: Export the current object (using generics).");
-                    System.out.println("reload: Make Nagios reload the config (write and check first!)");
-                    System.out.println("rm: Delete the current object.");
-                    System.out.println("find: find any named object or group.");
-                    System.out.println("help: you are reading it.");
-                    System.out.println("ls: list the current object or group.");
-                    System.out.println("    -l (long) show more data (1 item per line)");
-                    System.out.println("    -r (refs, implies -l) also show data from referrals");
-                    System.out.println("    -s (sort) sort the output");
-                    System.out.println("    -d (dns, implies -l) attempt to resolve the 'address' field (may be slow)");
-                    System.out.println("quit, exit or ^D: exit the program.");
-                    System.out.println("set: set a value in the current object to a new value (see also 'add').");
-                    System.out.println("write: write the entire config to /tmp/nagios.big (one file).");
-                } else if (cmd.equals("quit") || cmd.equals("exit")) {
-                    break;
-                } else if (cmd.equals("diff")) {
-                    if (item == null) {
-                        System.out.println("Nothing to compare, cd to an object first.");
-                    } else {
-                        NagItem rawItem;
-                        synchronized (raw) {
-                            rawItem = raw.get(item.getType(), item.getName());
-                        }
-                        if (rawItem == null) {
-                            System.out.println("Raw item not found (in Nagios object cache).");
-                            System.out.println("Maybe write, check and reload the current config first?");
-                            System.out.println("(anywhere)> write");
-                            System.out.println("(anywhere)> check");
-                            System.out.println("(anywhere)> reload");
-                        } else {
-                            File f1 = File.createTempFile("nagclicfg", ".cfg");
-                            File f2 = File.createTempFile("nagclicfg", ".cfg");
-                            try (PrintWriter pw = new PrintWriter(f1)) {
-                                rawItem.dump(pw, false);
-                            }
-                            try (PrintWriter pw = new PrintWriter(f2)) {
-                                item.dump(pw, true);
-                            }
-                            ProcessBuilder pb = new ProcessBuilder("diff", "-W", Integer.toString(TERMiNAL_WIDTH), "-y", f1.getAbsolutePath(), f2.getAbsolutePath());
-                            pb.redirectErrorStream(true);
-                            pb.inheritIO();
-                            final Process p = pb.start();
-                            try {
-                                p.waitFor();
-                            } catch (InterruptedException ex) {
-                                // no need to wait any longer?
-                            }
-                            f1.delete();
-                            f2.delete();
-                        }
-                    }
-
-                } else if (cmd.equals("dump")) {
-                    if (item == null) {
-                        System.out.println("Nothing to dump, cd to an object first.");
-                    } else {
-                        NagItem rawItem;
-                        synchronized (raw) {
-                            rawItem = raw.get(item.getType(), item.getName());
-                        }
-                        if (rawItem == null) {
-                            System.out.println("Raw item not found (in Nagios object cache).");
-                            System.out.println("Maybe write, check and reload the current config first?");
-                            System.out.println("(anywhere)> write");
-                            System.out.println("(anywhere)> check");
-                            System.out.println("(anywhere)> reload");
-                        } else {
-                            rawItem.dump(System.out, false);
-                        }
-                    }
-                } else if (cmd.equals("export")) {
-                    if (item == null) {
-                        System.out.println("Nothing to export, cd to an object first.");
-                    } else {
-                        item.dump(System.out, false);
-                    }
-                } else if (cmd.equals("clone")) {
-                    if (item == null) {
-                        System.out.println("Nothing to clone, cd to an object first.");
-                    } else {
-                        cloneObject(bfr);
-                    }
-                } else if (cmd.equals("rm")) {
-                    if (item == null) {
-                        System.out.println("Nothing to delete, cd to an object first.");
-                    } else {
-                        delete(bfr);
-                    }
-                } else if (cmd.startsWith("cd")) {
-                    cd(cmd.substring(2).trim());
-                } else if (cmd.startsWith("reload")) {
-                    ProcessBuilder pb = new ProcessBuilder(("/bin/sh " + config.getProperty("nagios.reload")).split(" "));
-                    pb.redirectErrorStream(true);
-                    pb.inheritIO();
-                    final Process p = pb.start();
-                    try {
-                        p.waitFor();
-                    } catch (InterruptedException ex) {
-                        // no need to wait any longer?
-                    }
-                } else if (cmd.startsWith("check")) {
-                    ProcessBuilder pb = new ProcessBuilder(config.getProperty("nagios.binary"), "-v", config.getProperty("nagios.config"));
-                    pb.redirectErrorStream(true);
-                    pb.inheritIO();
-                    final Process p = pb.start();
-                    try {
-                        p.waitFor();
-                    } catch (InterruptedException ex) {
-                        // no need to wait any longer?
-                    }
-                } else if (cmd.startsWith("ls")) {
-                    ls(cmd);
-                } else if (cmd.startsWith("find ")) {
-                    String arg = cmd.substring(4).trim().toLowerCase();
-                    for (NagItem e : all) {
-                        if (e.getName().toLowerCase().contains(arg)) {
-                            System.out.println("/" + e.getType().toString() + "/" + e.getName());
-                        }
-                    }
-                } else if (cmd.startsWith("set")) {
-                    set(cmd.substring(3).trim(), true);
-                } else if (cmd.startsWith("add")) {
-                    set(cmd.substring(3).trim(), false);
-                } else if (cmd.startsWith("write")) {
-                    write(bfr);
-                } else if (!cmd.isEmpty()) {
-                    System.out.println("Unknown cmd '" + cmd + "'");
-                    System.out.println("... want to implement it?");
-                    System.out.println("git clone https://github.com/Walter-Stroebel/NagCliCfg.git");
+    private void cli(String cmd) throws IOException {
+        if (cmd.equals("help")) {
+            System.out.println("add: add a value to the current object (see also 'set').");
+            System.out.println("cd <path>: move around in the configuration, use [ls] for suggestions.");
+            System.out.println("check: run 'nagios -v config_file' (do this after write!)");
+            System.out.println("clone: Clones the current object.");
+            System.out.println("diff: compare object to Nagios cached object (expect some differences).");
+            System.out.println("dump: Raw dump of the current object.");
+            System.out.println("echo: Just print the argument(s) to the output.");
+            System.out.println("else: inverted part of an if statement");
+            System.out.println("export: Export the current object (using generics).");
+            System.out.println("fi: closes an 'if' conditional block");
+            System.out.println("find: find any named object or group.");
+            System.out.println("help: you are reading it.");
+            System.out.println("ifadd <field> <value>: if the field was added continue processing commands, skip to else/fi otherwise.");
+            System.out.println("ifcd <path>: cd if exists and continue processing commands, skip to else/fi otherwise.");
+            System.out.println("ifset <field> <value>: if the field was changed continue processing commands, skip to else/fi otherwise.");
+            System.out.println("ls: list the current object or group.");
+            System.out.println("    -l (long) show more data (1 item per line)");
+            System.out.println("    -r (refs, implies -l) also show data from referrals");
+            System.out.println("    -s (sort) sort the output");
+            System.out.println("    -d (dns, implies -l) attempt to resolve the 'address' field (may be slow)");
+            System.out.println("quit, exit or ^D: exit the program.");
+            System.out.println("reload: Make Nagios reload the config (write and check first!)");
+            System.out.println("rm: Delete the current object.");
+            System.out.println("set: set a value in the current object to a new value (see also 'add').");
+            System.out.println("write: write the entire config to /tmp/nagios.big (one file).");
+        } else if (cmd.equals("quit") || cmd.equals("exit")) {
+            System.exit(0);
+        } else if (cmd.startsWith("echo ")) {
+            System.out.println(cmd.substring(5));
+        } else if (cmd.equals("diff")) {
+            if (item == null) {
+                System.out.println("Nothing to compare, cd to an object first.");
+            } else {
+                NagItem rawItem;
+                synchronized (raw) {
+                    rawItem = raw.get(item.getType(), item.getName());
                 }
-                if (!quiet) {
-                    System.out.print(getPath() + "> ");
-                    System.out.flush();
+                if (rawItem == null) {
+                    System.out.println("Raw item not found (in Nagios object cache).");
+                    System.out.println("Maybe write, check and reload the current config first?");
+                    System.out.println("(anywhere)> write");
+                    System.out.println("(anywhere)> check");
+                    System.out.println("(anywhere)> reload");
+                } else {
+                    File f1 = File.createTempFile("nagclicfg", ".cfg");
+                    File f2 = File.createTempFile("nagclicfg", ".cfg");
+                    try (PrintWriter pw = new PrintWriter(f1)) {
+                        rawItem.dump(pw, false);
+                    }
+                    try (PrintWriter pw = new PrintWriter(f2)) {
+                        item.dump(pw, true);
+                    }
+                    ProcessBuilder pb = new ProcessBuilder("diff", "-W", Integer.toString(TERMiNAL_WIDTH), "-y", f1.getAbsolutePath(), f2.getAbsolutePath());
+                    pb.redirectErrorStream(true);
+                    pb.inheritIO();
+                    final Process p = pb.start();
+                    try {
+                        p.waitFor();
+                    } catch (InterruptedException ex) {
+                        // no need to wait any longer?
+                    }
+                    f1.delete();
+                    f2.delete();
+                }
+            }
+
+        } else if (cmd.equals("dump")) {
+            if (item == null) {
+                System.out.println("Nothing to dump, cd to an object first.");
+            } else {
+                NagItem rawItem;
+                synchronized (raw) {
+                    rawItem = raw.get(item.getType(), item.getName());
+                }
+                if (rawItem == null) {
+                    System.out.println("Raw item not found (in Nagios object cache).");
+                    System.out.println("Maybe write, check and reload the current config first?");
+                    System.out.println("(anywhere)> write");
+                    System.out.println("(anywhere)> check");
+                    System.out.println("(anywhere)> reload");
+                } else {
+                    rawItem.dump(System.out, false);
+                }
+            }
+        } else if (cmd.equals("export")) {
+            if (item == null) {
+                System.out.println("Nothing to export, cd to an object first.");
+            } else {
+                item.dump(System.out, false);
+            }
+        } else if (cmd.equals("clone")) {
+            if (item == null) {
+                System.out.println("Nothing to clone, cd to an object first.");
+            } else {
+                cloneObject();
+            }
+        } else if (cmd.equals("rm")) {
+            if (item == null) {
+                System.out.println("Nothing to delete, cd to an object first.");
+            } else {
+                delete();
+            }
+        } else if (cmd.startsWith("ifcd")) {
+            if (cd(cmd.substring(4).trim(), false)) {
+                doIf();
+            } else {
+                doElse();
+            }
+        } else if (cmd.startsWith("cd")) {
+            cd(cmd.substring(2).trim(), true);
+        } else if (cmd.startsWith("reload")) {
+            ProcessBuilder pb = new ProcessBuilder(("/bin/sh " + config.getProperty("nagios.reload")).split(" "));
+            pb.redirectErrorStream(true);
+            pb.inheritIO();
+            final Process p = pb.start();
+            try {
+                p.waitFor();
+            } catch (InterruptedException ex) {
+                // no need to wait any longer?
+            }
+        } else if (cmd.startsWith("check")) {
+            ProcessBuilder pb = new ProcessBuilder(config.getProperty("nagios.binary"), "-v", config.getProperty("nagios.config"));
+            pb.redirectErrorStream(true);
+            pb.inheritIO();
+            final Process p = pb.start();
+            try {
+                p.waitFor();
+            } catch (InterruptedException ex) {
+                // no need to wait any longer?
+            }
+        } else if (cmd.startsWith("ls")) {
+            ls(cmd);
+        } else if (cmd.startsWith("find ")) {
+            String arg = cmd.substring(4).trim().toLowerCase();
+            for (NagItem e : all) {
+                if (e.getName().toLowerCase().contains(arg)) {
+                    System.out.println("/" + e.getType().toString() + "/" + e.getName());
+                }
+            }
+        } else if (cmd.startsWith("set")) {
+            set(cmd.substring(3).trim(), true);
+        } else if (cmd.startsWith("ifset")) {
+            if (set(cmd.substring(5).trim(), true)) {
+                doIf();
+            } else {
+                doElse();
+            }
+        } else if (cmd.startsWith("ifadd")) {
+            if (set(cmd.substring(5).trim(), false)) {
+                doIf();
+            } else {
+                doElse();
+            }
+        } else if (cmd.startsWith("add")) {
+            set(cmd.substring(3).trim(), false);
+        } else if (cmd.startsWith("write")) {
+            write();
+        } else {
+            System.out.println("Unknown cmd '" + cmd + "'");
+            System.out.println("... want to implement it?");
+            System.out.println("git clone https://github.com/Walter-Stroebel/NagCliCfg.git");
+        }
+    }
+
+    private void doElse() throws IOException {
+        if (skip("fi", "else").equals("else")) {
+            while (true) {
+                String cmd2 = readLine(null);
+                if (cmd2 == null) {
+                    return;
+                } else {
+                    if (cmd2.equals("fi")) {
+                        return;
+                    } else {
+                        cli(cmd2);
+                    }
+                }
+            }
+        }
+    }
+
+    private void doIf() throws IOException {
+        while (true) {
+            String cmd2 = readLine(null);
+            if (cmd2 == null) {
+                return;
+            } else {
+                if (cmd2.equals("else")) {
+                    skip("fi");
+                    return;
+                } else if (cmd2.equals("fi")) {
+                    return;
+                } else {
+                    cli(cmd2);
                 }
             }
         }
@@ -398,7 +541,7 @@ public class NagCliCfg {
                 }
             }
             if (oRecr) {
-                for (NagPointer c : item.children) {
+                for (NagPointer c : item.getChildren()) {
                     grid.add(new String[]{c.key, "--> " + c.item.getName()});
                 }
             }
@@ -474,28 +617,38 @@ public class NagCliCfg {
     }
     public static int TERMiNAL_WIDTH = 100;
 
-    private void set(String nvp, boolean ifExists) {
+    private boolean set(String nvp, boolean ifExists) {
         String[] two = splitNVP(nvp);
         String key = two[0];
         String val = two[1];
         if (item == null) {
             System.out.println("No current item, cd to one first");
-        } else {
+            return false;
+        } else if (ifExists && item.containsKey(key)) {
+            String oldVal = item.get(key);
+            if (oldVal != null && oldVal.equals(val)) {
+                return false;
+            }
             if (key.equals(item.getNameField())) {
                 rename(item.get(key), val);
-                System.out.println("Changing '" + key + "' from '" + item.get(key) + "' to '" + val + "'");
+                System.out.println("Changing '" + key + "' from '" + oldVal + "' to '" + val + "'");
                 item.put(key, val);
-            } else if (ifExists && item.containsKey(key)) {
-                System.out.println("Changing '" + key + "' from '" + item.get(key) + "' to '" + val + "'");
-                item.put(key, val);
-            } else if (!ifExists && !item.containsKey(key)) {
-                System.out.println("Adding '" + key + "' as '" + val + "'");
-                item.put(key, val);
-            } else if (item.containsKey(key)) {
-                System.out.println("Not adding '" + key + "' as '" + val + "'; item already exists. Use [set key value] instead.");
+                return true;
             } else {
-                System.out.println("Not setting '" + key + "' to '" + val + "'; not an existing item. Use [add key value] instead.");
+                System.out.println("Changing '" + key + "' from '" + oldVal + "' to '" + val + "'");
+                item.put(key, val);
+                return true;
             }
+        } else if (!ifExists && !item.containsKey(key)) {
+            System.out.println("Adding '" + key + "' as '" + val + "'");
+            item.put(key, val);
+            return true;
+        } else if (item.containsKey(key)) {
+            System.out.println("Not adding '" + key + "' as '" + val + "'; item already exists. Use [set key value] instead.");
+            return false;
+        } else {
+            System.out.println("Not setting '" + key + "' to '" + val + "'; not an existing item. Use [add key value] instead.");
+            return false;
         }
     }
 
@@ -535,7 +688,7 @@ public class NagCliCfg {
      */
     private void rename(String from, String to) {
         for (NagItem e1 : all) {
-            for (NagPointer e2 : e1.children) {
+            for (NagPointer e2 : e1.getChildren()) {
                 if (e2.item.getName().equals(from)) {
                     System.out.print("Old name is refered to in field '" + e2.key + "' in object '" + e1.getType() + "." + e1.getName() + "'");
                     String[] split = e1.get(e2.key).split(",");
@@ -560,7 +713,7 @@ public class NagCliCfg {
     /**
      * Write this configuration to the Nagios configuration directory.
      */
-    private void write(BufferedReader bfr) throws IOException {
+    private void write() throws IOException {
         boolean isNagCliCfg = true;
         File nagCfg = new File(config.getProperty("nagios.config"));
         File nagDir = nagCfg.getParentFile();
@@ -572,6 +725,10 @@ public class NagCliCfg {
             }
         }
         if (!isNagCliCfg) {
+            if (_quiet) {
+                System.err.println("Nagios is not yet configured by NagcliCfg and using batch mode.");
+                System.err.println("Skipping write command (no changes are made nor saved!)");
+            }
             System.out.println("Warning! This might restructure your current Nagios configuration completely!");
             System.out.println("The following directive will be disabled in " + config.getProperty("nagios.config") + ":");
             for (File f : files) {
@@ -587,12 +744,8 @@ public class NagCliCfg {
             System.out.println("In that directory, files will be created for each object type.");
             System.out.println("You can return to your old setup by inverting those modifications.");
             System.out.println("Are you sure you want to do this (ie. you *HAVE* a backup)?");
-            System.out.print("Type YES to continue: ");
-            String yes = bfr.readLine();
-            if (yes == null) {
-                System.exit(0);
-            }
-            if (!"YES".equals(yes)) {
+            String yes = readLine("Type YES to continue: ");
+            if (yes == null || !"YES".equals(yes)) {
                 return;
             }
             if (!cfgDir.exists()) {
@@ -656,7 +809,7 @@ public class NagCliCfg {
      *
      * @param path Where to go.
      */
-    private void cd(String path) {
+    private boolean cd(String path, boolean failIfNotExists) {
         String oldPath = getPath();
         if (!path.startsWith("/")) {
             path = getPath() + "/" + path;
@@ -684,8 +837,8 @@ public class NagCliCfg {
                         }
                     }
                     if (dir == null) {
-                        cdError(part, oldPath);
-                        return;
+                        cdError(part, oldPath, failIfNotExists);
+                        return false;
                     }
                 } else if (item == null) {
                     for (NagItem e : nagDb.get(dir)) {
@@ -695,20 +848,20 @@ public class NagCliCfg {
                         }
                     }
                     if (item == null) {
-                        cdError(part, oldPath);
-                        return;
+                        cdError(part, oldPath, failIfNotExists);
+                        return false;
                     }
                 } else {
                     NagItem nItem = null;
-                    for (NagPointer e2 : item.children) {
+                    for (NagPointer e2 : item.getChildren()) {
                         if (part.endsWith(e2.item.getName())) {
                             nItem = e2.item;
                             break;
                         }
                     }
                     if (nItem == null) {
-                        cdError(part, oldPath);
-                        return;
+                        cdError(part, oldPath, failIfNotExists);
+                        return false;
                     } else {
                         stack.push(item);
                         item = nItem;
@@ -716,6 +869,7 @@ public class NagCliCfg {
                 }
             }
         }
+        return true;
     }
 
     /**
@@ -725,9 +879,11 @@ public class NagCliCfg {
      * @param part Path part that was not found.
      * @param oldPath Original path.
      */
-    private void cdError(String part, String oldPath) {
-        System.out.println("Not found: '" + part + "' in " + getPath());
-        cd(oldPath);
+    private void cdError(String part, String oldPath, boolean failIfNotExists) {
+        if (failIfNotExists) {
+            System.out.println("Not found: '" + part + "' in " + getPath());
+        }
+        cd(oldPath, true);
     }
 
     /**
@@ -823,7 +979,7 @@ public class NagCliCfg {
         }
     }
 
-    private void cloneObject(BufferedReader bfr) throws IOException {
+    private void cloneObject() throws IOException {
         NagItem ni = NagItem.construct(this, item.getType());
         if (item.getNameField().equals("name")) {
             // kewl, cloning a generic object
@@ -834,11 +990,9 @@ public class NagCliCfg {
             ni.putAll(item);
             ni.remove(item.getNameField());
         }
-        System.out.print("Enter a new name: ");
-        String name = bfr.readLine();
+        String name = readLine("Enter a new name: ");
         if (name == null) {
-            // user pressed ^D I guess.
-            System.exit(0);
+            return;
         }
         // blech, this is hacky
         if (item.type == Types.service) {
@@ -852,15 +1006,16 @@ public class NagCliCfg {
             System.err.println("Fatal error cloning " + ni + "; managed to create a unnamed item.");
             System.exit(1);
         }
-        // crash if the below returns null -- major weird stuff going on!
+        // the below should never return null so let Java throw the exception if major weird stuff is going on!
         nagDb.get(item.type).add(ni);
-        ni.collectChildren();
         stack.clear();
         item = ni;
-        ls("ls -rd");
+        if (!_quiet || _echo) {
+            ls("ls -rd");
+        }
     }
 
-    private void delete(BufferedReader bfr) {
+    private void delete() {
         System.out.println("Not implemented yet.");
         System.out.println("You would have nuked:");
         ls("ls -rd");
@@ -876,6 +1031,35 @@ public class NagCliCfg {
         item = null;
         nagDb.clear();
         stack.clear();
+        input = null;
+        args = null;
+    }
+
+    /**
+     * Simple if else fi processing.
+     *
+     * @param bfr Command stream.
+     * @param until End tokens.
+     * @return Token we ended on.
+     * @throws IOException If it does.
+     */
+    private String skip(String... until) throws IOException {
+        TreeSet<String> _until = new TreeSet<>(Arrays.asList(until));
+        while (true) {
+            String skip = readLine(null);
+            if (skip == null) {
+                // artifact, force end of processing
+                return "fi";
+            }
+            if (_until.contains(skip)) {
+                return skip;
+            }
+            if (skip.startsWith("if")) {
+                if (skip("else", "fi").equals("else")) {
+                    skip("fi");
+                }
+            }
+        }
     }
 
     private static class UpdateRaw extends Thread {

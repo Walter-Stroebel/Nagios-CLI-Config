@@ -16,85 +16,23 @@ public class Service extends NoDepNagItem {
 
     @Override
     public String getNameField() {
-        if (containsKey("service_description")) return "service_description";
+        if (containsKey("service_description")) {
+            return "service_description";
+        }
         return super.getNameField();
     }
 
     @Override
-    public void collectChildren() {
-        super.collectChildren();
-        String k = get("host_name");
-        if (k != null && !k.isEmpty()) {
-            NagItem c = owner.get(Types.host, k);
-            children.add(new NagPointer("host_name", c));
+    public ArrayList<NagPointer> getChildren() {
+        ArrayList<NagPointer> children = super.getChildren();
+        children.addAll(getChildren("hostgroups", Types.hostgroup));
+        addChild(children, "host_name", Types.host);
+        addChild(children, "use", Types.service);
+        NagItem c = owner.get(Types.hostextinfo, getName());
+        if (c != null) {
+            children.add(new NagPointer(getNameField(), c));
         }
-        k = get("use");
-        if (k != null && !k.isEmpty()) {
-            NagItem c = owner.get(Types.service, k);
-            if (c == null) {
-                System.out.println(getName() + " tries to use " + k + "; which does not exist");
-            } else {
-                children.add(new NagPointer("use", c));
-            }
-        }
-        k = get("hostgroups");
-        if (k != null && !k.isEmpty()) {
-            String[] mems = k.split(",");
-            for (String mem : mems) {
-                NagItem c = owner.get(Types.hostgroup, mem);
-                if (c == null) {
-                    System.out.println(getName() + " refers to hostgroup " + mem + "; which does not exist");
-                } else {
-                    children.add(new NagPointer("hostgroups", c));
-                    if (getNameField().equals("host_name")) {
-                        TreeSet<String> members = new TreeSet<>();
-                        members.add(getName());
-                        if (c.get("members").contains("*")) {
-                            c.put("members", "*"); // all is all
-                            for (Iterator<NagPointer> it = c.children.iterator(); it.hasNext();) {
-                                NagPointer e = it.next();
-                                if (e.key.equals("members")) {
-                                    it.remove();
-                                }
-                            }
-                            ArrayList<NagItem> allh = owner.nagDb.get(Types.host);
-                            Collections.sort(allh, new Comparator<NagItem>() {
-
-                                @Override
-                                public int compare(NagItem o1, NagItem o2) {
-                                    return o1.getName().compareTo(o2.getName());
-                                }
-                            });
-                            for (NagItem hi : allh) {
-                                c.children.add(new NagPointer("members", hi));
-                            }
-                        } else {
-                            String[] hgmems = c.get("members").split(",");
-                            members.addAll(Arrays.asList(hgmems));
-                            String sep = "";
-                            StringBuilder ms = new StringBuilder();
-                            for (Iterator<NagPointer> it = c.children.iterator(); it.hasNext();) {
-                                NagPointer e = it.next();
-                                if (e.key.equals("members")) {
-                                    it.remove();
-                                }
-                            }
-                            for (String hgm : members) {
-                                ms.append(sep).append(hgm);
-                                NagItem freshChild = owner.get(Types.host, hgm);
-                                if (freshChild == null) {
-                                    System.err.println("??? Why can't I find a host for " + hgm);
-                                } else {
-                                    c.children.add(new NagPointer("members", freshChild));
-                                }
-                                sep = ",";
-                            }
-                            c.put("members", ms.toString());
-                        }
-                    }
-                }
-            }
-        }
+        return children;
     }
 
     public Service(NagCliCfg owner) {
@@ -104,7 +42,7 @@ public class Service extends NoDepNagItem {
     @Override
     public TreeMap<String, String> getAllFields() {
         TreeMap<String, String> ret = new TreeMap<>(super.getAllFields());
-        if (containsKey("use")){
+        if (containsKey("use")) {
             ret.putAll(owner.get(Types.service, get("use")));
         }
         return ret;

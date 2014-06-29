@@ -5,6 +5,8 @@
 
 package nl.infcomtec.nagclicfg;
 
+import java.util.ArrayList;
+
 
 public class HostExtInfo extends NoDepNagItem {
 
@@ -14,17 +16,16 @@ public class HostExtInfo extends NoDepNagItem {
 
     @Override
     public String getNameField() {
+        if (containsKey("host_name"))
+            return "host_name";
         return "hostgroup_name";
     }
-
     @Override
-    public void collectChildren() {
-        super.collectChildren();
-        String k = get("hostgroup_name");
-        if (k != null && !k.isEmpty()) {
-            NagItem c = owner.get(Types.hostgroup, k);
-            children.add(new NagPointer("hostgroup_name", c));
-        }
+    public ArrayList<NagPointer> getChildren() {
+        ArrayList<NagPointer> children = super.getChildren();
+        children.addAll(getChildren("host_name", Types.host));
+        children.addAll(getChildren("hostgroups_name",Types.hostgroup));
+        return children;
     }
     
 }

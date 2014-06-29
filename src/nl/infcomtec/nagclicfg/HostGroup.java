@@ -4,6 +4,8 @@
  */
 package nl.infcomtec.nagclicfg;
 
+import java.util.ArrayList;
+
 public class HostGroup extends NoDepNagItem {
 
     public HostGroup(NagCliCfg owner) {
@@ -11,24 +13,14 @@ public class HostGroup extends NoDepNagItem {
     }
 
     @Override
-    public void collectChildren() {
-        super.collectChildren();
-        String members = get("members");
-        if (members != null) {
-            String[] mems = members.split(",");
-            for (String mem : mems) {
-                NagItem c = owner.get(Types.host, mem);
-                if (c != null) {
-                    children.add(new NagPointer("members", c));
-                }
-            }
+    public ArrayList<NagPointer> getChildren() {
+        ArrayList<NagPointer> children = super.getChildren();
+        children.addAll(members(Types.host));
+        NagItem c = owner.get(Types.hostextinfo, getName());
+        if (c != null) {
+            children.add(new NagPointer(getNameField(), c));
         }
-        {
-            NagItem c = owner.get(Types.hostextinfo, getName());
-            if (c != null) {
-                children.add(new NagPointer(getNameField(), c));
-            }
-        }
+        return children;
     }
 
 }

@@ -17,4 +17,9 @@ public class NagPointer {
         this.key = key;
         this.item = item;
     }
+
+    @Override
+    public String toString() {
+        return "NagPointer{" + "key=" + key + ", item=" + item + '}';
+    }
 }
