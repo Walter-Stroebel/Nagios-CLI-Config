@@ -25,6 +25,7 @@ public class Service extends NoDepNagItem {
     public ArrayList<NagPointer> getChildren() {
         ArrayList<NagPointer> children = super.getChildren();
         children.addAll(getChildren("hostgroups", Types.hostgroup));
+        children.addAll(getChildren("contact_groups", Types.contactgroup));
         addChild(children, "host_name", Types.host);
         addChild(children, "hostgroup_name", Types.hostgroup);
         addChild(children, "use", Types.service);

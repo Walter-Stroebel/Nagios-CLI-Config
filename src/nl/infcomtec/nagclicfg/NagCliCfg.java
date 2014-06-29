@@ -284,6 +284,7 @@ public class NagCliCfg {
             System.out.println("    -r (refs, implies -l) also show data from referrals");
             System.out.println("    -s (sort) sort the output");
             System.out.println("    -d (dns, implies -l) attempt to resolve the 'address' field (may be slow)");
+            System.out.println("pwd: shows where you really are.");
             System.out.println("quit, exit or ^D: exit the program.");
             System.out.println("reload: Make Nagios reload the config (write and check first!)");
             System.out.println("rm: Delete the current object.");
@@ -293,6 +294,16 @@ public class NagCliCfg {
             System.exit(0);
         } else if (cmd.startsWith("echo ")) {
             System.out.println(cmd.substring(5));
+        } else if (cmd.equals("pwd")) {
+            if (dir == null) {
+                System.out.println("/");
+            } else {
+                if (item != null) {
+                    System.out.println("/"+item.getType().toString()+"/" + item.getName());
+                } else {
+                    System.out.println("/" + dir.toString());
+                }
+            }
         } else if (cmd.equals("diff")) {
             if (item == null) {
                 System.out.println("Nothing to compare, cd to an object first.");
