@@ -38,7 +38,7 @@ quit, exit or ^D: exit the program.
 reload: Make Nagios reload the config (write and check first!)
 rm: Delete the current object.
 set: set a value in the current object to a new value (see also 'add').
-write: write the entire config to /tmp/nagios.big (one file).
+write: write the entire config.
 /> ls
 command       contact       contactgroup  host          hostgroup     service      
 servicegroup  timeperiod    hostextinfo  

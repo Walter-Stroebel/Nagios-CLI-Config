@@ -284,12 +284,13 @@ public class NagCliCfg {
             System.out.println("    -r (refs, implies -l) also show data from referrals");
             System.out.println("    -s (sort) sort the output");
             System.out.println("    -d (dns, implies -l) attempt to resolve the 'address' field (may be slow)");
+            System.out.println("mv: context sensitive, pick from the options offered.");
             System.out.println("pwd: shows where you really are.");
             System.out.println("quit, exit or ^D: exit the program.");
             System.out.println("reload: Make Nagios reload the config (write and check first!)");
             System.out.println("rm: Delete the current object.");
             System.out.println("set: set a value in the current object to a new value (see also 'add').");
-            System.out.println("write: write the entire config to /tmp/nagios.big (one file).");
+            System.out.println("write: write the entire config.");
         } else if (cmd.equals("quit") || cmd.equals("exit")) {
             System.exit(0);
         } else if (cmd.startsWith("echo ")) {
@@ -299,11 +300,13 @@ public class NagCliCfg {
                 System.out.println("/");
             } else {
                 if (item != null) {
-                    System.out.println("/"+item.getType().toString()+"/" + item.getName());
+                    System.out.println("/" + item.getType().toString() + "/" + item.getName());
                 } else {
                     System.out.println("/" + dir.toString());
                 }
             }
+        } else if (cmd.equals("mv")) {
+            move();
         } else if (cmd.equals("diff")) {
             if (item == null) {
                 System.out.println("Nothing to compare, cd to an object first.");
@@ -436,6 +439,54 @@ public class NagCliCfg {
             System.out.println("Unknown cmd '" + cmd + "'");
             System.out.println("... want to implement it?");
             System.out.println("git clone https://github.com/Walter-Stroebel/NagCliCfg.git");
+        }
+    }
+
+    private void move() throws IOException {
+        if (item != null) {
+            switch (item.getType()) {
+                case service:
+                    if (item.containsKey("host_name") && item.containsKey("service_description")) {
+                        System.out.println("Add this service to a service group?");
+                        System.out.println("- Create a new service group, just type a new name.");
+                        TreeMap<String, NagItem> lm = nagDb.get(Types.servicegroup);
+                        if (lm == null) {
+                            nagDb.put(dir, lm = new TreeMap<>());
+                        }
+                        for (NagItem e : lm.values()) {
+                            System.out.println("- Existing group '" + e.getName() + "'");
+                        }
+                        System.out.println("- [enter] to do nothing.");
+                        String pick = readLine("Pick one:");
+                        if (pick.isEmpty()) {
+                            return;
+                        }
+                        NagItem dest = get(Types.servicegroup, pick);
+                        if (dest == null) {
+                            dest = NagItem.construct(this, Types.servicegroup);
+                            dest.put("alias", pick);
+                            dest.put("servicegroup_name", pick);
+                            dest.put("members", item.get("host_name") + "," + item.get("service_description"));
+                            lm.put(dest.getName(), dest);
+                        } else {
+                            String mems = dest.get("members");
+                            if (mems == null) {
+                                mems = item.get("host_name") + "," + item.get("service_description");
+                            } else {
+                                mems += "," + item.get("host_name") + "," + item.get("service_description");
+                            }
+                            dest.put("members", mems);
+                        }
+                    } else {
+                        System.out.println("Sorry, no move actions defined for this type of service definition.");
+                    }
+                    break;
+                default:
+                    System.out.println("Sorry, no move actions defined for a " + item.getType().toString());
+                    break;
+            }
+        } else {
+            System.out.println("Sorry, no move actions defined at this level.");
         }
     }
 
@@ -828,6 +879,11 @@ public class NagCliCfg {
         StringTokenizer toker = new StringTokenizer(path, "/");
         while (toker.hasMoreTokens()) {
             String part = toker.nextToken();
+            int pLen = -1;
+            if (part.endsWith("*")) {
+                pLen = part.length() - 1;
+                part = part.substring(0, pLen);
+            }
             if (part.equals("..")) {
                 if (!stack.empty()) {
                     item = stack.pop();
@@ -839,7 +895,13 @@ public class NagCliCfg {
             } else {
                 if (dir == null) {
                     for (Types t : Types.values()) {
-                        if (part.endsWith(t.toString())) {
+                        if (pLen == 0) {
+                            dir = t;
+                            break;
+                        } else if (pLen > 0 && t.toString().length() >= pLen && t.toString().substring(0, pLen).equals(part)) {
+                            dir = t;
+                            break;
+                        } else if (part.equals(t.toString())) {
                             dir = t;
                             break;
                         }
@@ -850,7 +912,13 @@ public class NagCliCfg {
                     }
                 } else if (item == null) {
                     for (NagItem e : nagDb.get(dir).values()) {
-                        if (part.endsWith(e.getName())) {
+                        if (pLen == 0) {
+                            item = e;
+                            break;
+                        } else if (pLen > 0 && e.getName().length() >= pLen && e.getName().substring(0, pLen).equals(part)) {
+                            item = e;
+                            break;
+                        } else if (part.equals(e.getName())) {
                             item = e;
                             break;
                         }
@@ -862,7 +930,13 @@ public class NagCliCfg {
                 } else {
                     NagItem nItem = null;
                     for (NagPointer e2 : item.getChildren()) {
-                        if (part.endsWith(e2.item.getName())) {
+                        if (pLen == 0) {
+                            nItem = e2.item;
+                            break;
+                        } else if (pLen > 0 && e2.item.getName().length() >= pLen && e2.item.getName().substring(0, pLen).equals(part)) {
+                            nItem = e2.item;
+                            break;
+                        } else if (part.equals(e2.item.getName())) {
                             nItem = e2.item;
                             break;
                         }
