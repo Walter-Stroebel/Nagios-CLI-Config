@@ -5,6 +5,7 @@ Command line (sort of) configuration of Nagios.
 
 - 2014-06-27: Release early, release often.
 - 2014-06-28: Beta version, it works for me!
+- 2014-06-29: Functional version, now supports scripting with conditionals and parameters.
 
 What works:
 
@@ -19,6 +20,7 @@ What works:
 - diff with Nagios raw objects.
 - export cooked object.
 - dump raw object.
+- idem-potent creation of object, see the createOrAdd.ncc sample script.
 
 TODO:
 =====
