@@ -466,7 +466,7 @@ public class NagCliCfg {
             + "    -r (refs, implies -l) also show data from referrals\n"//
             + "    -s (sort) sort the output\n"//
             + "    -d (dns, implies -l) attempt to resolve the 'address' field (may be slow)",
-            "mv: context sensitive, pick from the options offered.",
+            "mv: context sensitive; pick from the options offered.",
             "pwd: shows where you really are.",
             "quit, exit or ^D: exit the program.",
             "reload: Make Nagios reload the config (write and check first!)",
