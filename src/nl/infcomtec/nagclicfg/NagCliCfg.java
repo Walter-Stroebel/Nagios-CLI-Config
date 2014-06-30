@@ -222,7 +222,7 @@ public class NagCliCfg {
             input = null;
         } else {
             ret = ret.trim();
-            if (ret.startsWith("#") || ret.startsWith(";") || ret.isEmpty()) {
+            if (ret.startsWith("#") || ret.startsWith(";")) {
                 if (_echo) {
                     System.out.println("ignoring: (" + ret + ")");
                 }
@@ -263,34 +263,11 @@ public class NagCliCfg {
     private final Stack<NagItem> stack = new Stack<>();
 
     private void cli(String cmd) throws IOException {
+        if (cmd.isEmpty()) {
+            return;
+        }
         if (cmd.equals("help")) {
-            System.out.println("add: add a value to the current object (see also 'set').");
-            System.out.println("cd <path>: move around in the configuration, use [ls] for suggestions.");
-            System.out.println("check: run 'nagios -v config_file' (do this after write!)");
-            System.out.println("clone: Clones the current object.");
-            System.out.println("diff: compare object to Nagios cached object (expect some differences).");
-            System.out.println("dump: Raw dump of the current object.");
-            System.out.println("echo: Just print the argument(s) to the output.");
-            System.out.println("else: inverted part of an if statement");
-            System.out.println("export: Export the current object (using generics).");
-            System.out.println("fi: closes an 'if' conditional block");
-            System.out.println("find: find any named object or group.");
-            System.out.println("help: you are reading it.");
-            System.out.println("ifadd <field> <value>: if the field was added continue processing commands, skip to else/fi otherwise.");
-            System.out.println("ifcd <path>: cd if exists and continue processing commands, skip to else/fi otherwise.");
-            System.out.println("ifset <field> <value>: if the field was changed continue processing commands, skip to else/fi otherwise.");
-            System.out.println("ls: list the current object or group.");
-            System.out.println("    -l (long) show more data (1 item per line)");
-            System.out.println("    -r (refs, implies -l) also show data from referrals");
-            System.out.println("    -s (sort) sort the output");
-            System.out.println("    -d (dns, implies -l) attempt to resolve the 'address' field (may be slow)");
-            System.out.println("mv: context sensitive, pick from the options offered.");
-            System.out.println("pwd: shows where you really are.");
-            System.out.println("quit, exit or ^D: exit the program.");
-            System.out.println("reload: Make Nagios reload the config (write and check first!)");
-            System.out.println("rm: Delete the current object.");
-            System.out.println("set: set a value in the current object to a new value (see also 'add').");
-            System.out.println("write: write the entire config.");
+            printHelp();
         } else if (cmd.equals("quit") || cmd.equals("exit")) {
             System.exit(0);
         } else if (cmd.startsWith("echo ")) {
@@ -308,42 +285,7 @@ public class NagCliCfg {
         } else if (cmd.equals("mv")) {
             move();
         } else if (cmd.equals("diff")) {
-            if (item == null) {
-                System.out.println("Nothing to compare, cd to an object first.");
-            } else {
-                NagItem rawItem;
-                synchronized (raw) {
-                    rawItem = raw.get(item.getType(), item.getName());
-                }
-                if (rawItem == null) {
-                    System.out.println("Raw item not found (in Nagios object cache).");
-                    System.out.println("Maybe write, check and reload the current config first?");
-                    System.out.println("(anywhere)> write");
-                    System.out.println("(anywhere)> check");
-                    System.out.println("(anywhere)> reload");
-                } else {
-                    File f1 = File.createTempFile("nagclicfg", ".cfg");
-                    File f2 = File.createTempFile("nagclicfg", ".cfg");
-                    try (PrintWriter pw = new PrintWriter(f1)) {
-                        rawItem.dump(pw, false);
-                    }
-                    try (PrintWriter pw = new PrintWriter(f2)) {
-                        item.dump(pw, true);
-                    }
-                    ProcessBuilder pb = new ProcessBuilder("diff", "-W", Integer.toString(TERMiNAL_WIDTH), "-y", f1.getAbsolutePath(), f2.getAbsolutePath());
-                    pb.redirectErrorStream(true);
-                    pb.inheritIO();
-                    final Process p = pb.start();
-                    try {
-                        p.waitFor();
-                    } catch (InterruptedException ex) {
-                        // no need to wait any longer?
-                    }
-                    f1.delete();
-                    f2.delete();
-                }
-            }
-
+            diff();
         } else if (cmd.equals("dump")) {
             if (item == null) {
                 System.out.println("Nothing to dump, cd to an object first.");
@@ -373,12 +315,6 @@ public class NagCliCfg {
                 System.out.println("Nothing to clone, cd to an object first.");
             } else {
                 cloneObject();
-            }
-        } else if (cmd.equals("rm")) {
-            if (item == null) {
-                System.out.println("Nothing to delete, cd to an object first.");
-            } else {
-                delete();
             }
         } else if (cmd.startsWith("ifcd")) {
             if (cd(cmd.substring(4).trim(), false)) {
@@ -417,22 +353,30 @@ public class NagCliCfg {
                     System.out.println("/" + e.getType().toString() + "/" + e.getName());
                 }
             }
+        } else if (cmd.startsWith("rm")) {
+            set(cmd.substring(3).trim(), true, true);
+        } else if (cmd.startsWith("ifrm")) {
+            if (set(cmd.substring(5).trim(), true, true)) {
+                doIf();
+            } else {
+                doElse();
+            }
         } else if (cmd.startsWith("set")) {
-            set(cmd.substring(3).trim(), true);
+            set(cmd.substring(3).trim(), true, false);
         } else if (cmd.startsWith("ifset")) {
-            if (set(cmd.substring(5).trim(), true)) {
+            if (set(cmd.substring(5).trim(), true, false)) {
                 doIf();
             } else {
                 doElse();
             }
         } else if (cmd.startsWith("ifadd")) {
-            if (set(cmd.substring(5).trim(), false)) {
+            if (set(cmd.substring(5).trim(), false, false)) {
                 doIf();
             } else {
                 doElse();
             }
         } else if (cmd.startsWith("add")) {
-            set(cmd.substring(3).trim(), false);
+            set(cmd.substring(3).trim(), false, false);
         } else if (cmd.startsWith("write")) {
             write();
         } else {
@@ -442,12 +386,129 @@ public class NagCliCfg {
         }
     }
 
+    private void diff() throws IOException {
+        if (item == null) {
+            System.out.println("Nothing to compare, cd to an object first.");
+        } else {
+            NagItem rawItem;
+            synchronized (raw) {
+                rawItem = raw.get(item.getType(), item.getName());
+            }
+            if (rawItem == null) {
+                System.out.println("Raw item not found (in Nagios object cache).");
+                System.out.println("Maybe write, check and reload the current config first?");
+                System.out.println("(anywhere)> write");
+                System.out.println("(anywhere)> check");
+                System.out.println("(anywhere)> reload");
+            } else {
+                File f1 = File.createTempFile("nagclicfg", ".cfg");
+                File f2 = File.createTempFile("nagclicfg", ".cfg");
+                try (PrintWriter pw = new PrintWriter(f1)) {
+                    rawItem.dump(pw, false);
+                }
+                try (PrintWriter pw = new PrintWriter(f2)) {
+                    item.dump(pw, true);
+                }
+                ProcessBuilder pb = new ProcessBuilder("diff", "-W", Integer.toString(TERMiNAL_WIDTH), "-y", f1.getAbsolutePath(), f2.getAbsolutePath());
+                pb.redirectErrorStream(true);
+                pb.inheritIO();
+                final Process p = pb.start();
+                try {
+                    p.waitFor();
+                } catch (InterruptedException ex) {
+                    // no need to wait any longer?
+                }
+                f1.delete();
+                f2.delete();
+            }
+        }
+    }
+
+    private void printHelp() {
+        TreeSet<String> help = new TreeSet(Arrays.asList(new String[]{
+            "add: add a value to the current object (see also 'set').",
+            "cd <path>: move around in the configuration, use [ls] for suggestions.",
+            "check: run 'nagios -v config_file' (do this after write!)",
+            "clone: Clones the current object.",
+            "diff: compare object to Nagios cached object (expect some differences).",
+            "dump: Raw dump of the current object.",
+            "echo: Just print the argument(s) to the output.",
+            "else: inverted part of an if statement",
+            "export: Export the current object (using generics).",
+            "fi: closes an 'if' conditional block",
+            "find: find any named object or group.",
+            "help: you are reading it.",
+            "ifadd <field> <value>: if the field was added continue processing commands, skip to else/fi otherwise.",
+            "ifcd <path>: cd if exists and continue processing commands, skip to else/fi otherwise.",
+            "ifset <field> <value>: if the field was changed continue processing commands, skip to else/fi otherwise.",
+            "ifrm <field>: if the field was deleted continue processing commands, skip to else/fi otherwise.",
+            "ls: list the current object or group.\n"//
+            + "    -l (long) show more data (1 item per line)\n"//
+            + "    -r (refs, implies -l) also show data from referrals\n"//
+            + "    -s (sort) sort the output\n"//
+            + "    -d (dns, implies -l) attempt to resolve the 'address' field (may be slow)",
+            "mv: context sensitive, pick from the options offered.",
+            "pwd: shows where you really are.",
+            "quit, exit or ^D: exit the program.",
+            "reload: Make Nagios reload the config (write and check first!)",
+            "rm <field>: Delete a field in the current object.",
+            "set: set a value in the current object to a new value (see also 'add').",
+            "write: write the entire config."}));
+        for (String h : help) {
+            System.out.println(h);
+        }
+    }
+
     private void move() throws IOException {
         if (item != null) {
             switch (item.getType()) {
                 case service:
-                    if (item.containsKey("host_name") && item.containsKey("service_description")) {
-                        System.out.println("Add this service to a service group?");
+                    if (!item.containsKey(NagItem.SERVICE_DESCRIPTION)) {
+                        System.out.println("This service lacks a '" + NagItem.SERVICE_DESCRIPTION + "' field, [add] one first.");
+                        return;
+                    }
+                    if (!item.containsKey(NagItem.HOST_NAME) && !item.containsKey(NagItem.HOSTGROUP_NAME)) {
+                        System.out.println("Item must have either a '" + NagItem.HOST_NAME + "' or a '" + NagItem.HOSTGROUP_NAME + "' field.");
+                        return;
+                    }
+                    System.out.println("Enter H to move to a Host group or S to add to a Service group");
+                    String to = readLine("H,S,Enter(do nothing): ");
+                    if (to.equalsIgnoreCase("h") && item.containsKey(NagItem.HOST_NAME)) {
+                        System.out.println("Moving this service to a host group.");
+                        System.out.println("- Create a new host group, just type a new name.");
+                        TreeMap<String, NagItem> lm = nagDb.get(Types.hostgroup);
+                        if (lm == null) {
+                            nagDb.put(dir, lm = new TreeMap<>());
+                        }
+                        for (NagItem e : lm.values()) {
+                            System.out.println("- Existing group '" + e.getName() + "'");
+                        }
+                        System.out.println("- [enter] to do nothing.");
+                        String pick = readLine("Pick one: ");
+                        if (pick.isEmpty()) {
+                            return;
+                        }
+                        NagItem dest = get(Types.hostgroup, pick);
+                        if (dest == null) {
+                            dest = NagItem.construct(this, Types.hostgroup);
+                            dest.put("alias", pick);
+                            dest.put(NagItem.HOSTGROUP_NAME, pick);
+                            dest.put("members", item.get(NagItem.HOST_NAME));
+                            lm.put(dest.getName(), dest);
+                        } else {
+                            TreeSet<String> mems = dest.fieldToSet("members");
+                            if (mems == null) {
+                                dest.put("members", item.get(NagItem.HOST_NAME));
+                            } else {
+                                mems.add(item.get(NagItem.HOST_NAME));
+                                dest.put("members", NagItem.setToField(mems));
+                            }
+                        }
+                        item.remove(NagItem.HOST_NAME);
+                        item.put("hostgroup_name", pick);
+                    } else if (to.equalsIgnoreCase("s") && item.containsKey(NagItem.HOSTGROUP_NAME)) {
+                        String hgn = item.get(NagItem.HOSTGROUP_NAME);
+                        System.out.println("Adding all hosts from hostgroup '" + hgn + "' to a service group.");
                         System.out.println("- Create a new service group, just type a new name.");
                         TreeMap<String, NagItem> lm = nagDb.get(Types.servicegroup);
                         if (lm == null) {
@@ -457,25 +518,50 @@ public class NagCliCfg {
                             System.out.println("- Existing group '" + e.getName() + "'");
                         }
                         System.out.println("- [enter] to do nothing.");
-                        String pick = readLine("Pick one:");
+                        String pick = readLine("Pick one: ");
                         if (pick.isEmpty()) {
                             return;
                         }
-                        NagItem dest = get(Types.servicegroup, pick);
+                        ServiceGroup dest = (ServiceGroup) get(Types.servicegroup, pick);
                         if (dest == null) {
-                            dest = NagItem.construct(this, Types.servicegroup);
+                            dest = (ServiceGroup) NagItem.construct(this, Types.servicegroup);
                             dest.put("alias", pick);
                             dest.put("servicegroup_name", pick);
-                            dest.put("members", item.get("host_name") + "," + item.get("service_description"));
+                            lm.put(dest.getName(), dest);
+                        }
+                        TreeSet<ServiceGroup.HostAndService> mems = dest.members();
+                        NagItem hg = get(Types.hostgroup, hgn);
+                        String desc = item.get(NagItem.SERVICE_DESCRIPTION);
+                        for (String h : hg.fieldToSet("members")) {
+                            mems.add(new ServiceGroup.HostAndService(h, desc));
+                        }
+                        dest.put("members", dest.membersToString(mems));
+                    } else if (to.equalsIgnoreCase("s") && item.containsKey(NagItem.HOST_NAME)) {
+                        System.out.println("Adding this service to a service group.");
+                        System.out.println("- Create a new service group, just type a new name.");
+                        TreeMap<String, NagItem> lm = nagDb.get(Types.servicegroup);
+                        if (lm == null) {
+                            nagDb.put(dir, lm = new TreeMap<>());
+                        }
+                        for (NagItem e : lm.values()) {
+                            System.out.println("- Existing group '" + e.getName() + "'");
+                        }
+                        System.out.println("- [enter] to do nothing.");
+                        String pick = readLine("Pick one: ");
+                        if (pick.isEmpty()) {
+                            return;
+                        }
+                        ServiceGroup dest = (ServiceGroup) get(Types.servicegroup, pick);
+                        if (dest == null) {
+                            dest = (ServiceGroup) NagItem.construct(this, Types.servicegroup);
+                            dest.put("alias", pick);
+                            dest.put("servicegroup_name", pick);
+                            dest.put("members", item.get(NagItem.HOST_NAME) + "," + item.get(NagItem.SERVICE_DESCRIPTION));
                             lm.put(dest.getName(), dest);
                         } else {
-                            String mems = dest.get("members");
-                            if (mems == null) {
-                                mems = item.get("host_name") + "," + item.get("service_description");
-                            } else {
-                                mems += "," + item.get("host_name") + "," + item.get("service_description");
-                            }
-                            dest.put("members", mems);
+                            TreeSet<ServiceGroup.HostAndService> mems = dest.members();
+                            mems.add(new ServiceGroup.HostAndService(item.get(NagItem.HOST_NAME), item.get(NagItem.SERVICE_DESCRIPTION)));
+                            dest.put("members", dest.membersToString(mems));
                         }
                     } else {
                         System.out.println("Sorry, no move actions defined for this type of service definition.");
@@ -554,56 +640,7 @@ public class NagCliCfg {
                 }
             }
         }
-        ArrayList<String[]> grid = new ArrayList<>();
-        if (dir == null) {
-            for (Types t : Types.values()) {
-                if (nagDb.get(t) != null) {
-                    grid.add(new String[]{t.toString(), Integer.toString(nagDb.get(t).size())});
-                } else {
-                    grid.add(new String[]{t.toString(), "0"});
-                }
-            }
-        } else if (item == null) {
-            TreeMap<String, NagItem> col = nagDb.get(dir);
-            if (col != null) {
-                for (NagItem e : col.values()) {
-                    grid.add(new String[]{e.getName(), e.getNameFields()[0].equals("name") ? "generic" : "regular"});
-                }
-            }
-        } else {
-            if (oRecr) {
-                for (Map.Entry<String, String> e : item.getAllFields().entrySet()) {
-                    if (oDNS && e.getKey().equals("address")) {
-                        try {
-                            InetAddress a = InetAddress.getByName(e.getValue());
-                            grid.add(new String[]{e.getKey(), e.getValue() + " Addr=" + a.getHostAddress() + " (" + a.getCanonicalHostName() + ")"});
-                        } catch (UnknownHostException unknown) {
-                            grid.add(new String[]{e.getKey(), e.getValue() + " (DNS failed)"});
-                        }
-                    } else {
-                        grid.add(new String[]{e.getKey(), e.getValue()});
-                    }
-                }
-            } else {
-                for (Map.Entry<String, String> e : item.entrySet()) {
-                    if (oDNS && e.getKey().equals("address")) {
-                        try {
-                            InetAddress a = InetAddress.getByName(e.getValue());
-                            grid.add(new String[]{e.getKey(), e.getValue() + " Addr=" + a.getHostAddress() + " (" + a.getCanonicalHostName() + ")"});
-                        } catch (UnknownHostException unknown) {
-                            grid.add(new String[]{e.getKey(), e.getValue() + " (DNS failed)"});
-                        }
-                    } else {
-                        grid.add(new String[]{e.getKey(), e.getValue()});
-                    }
-                }
-            }
-            if (oRecr) {
-                for (NagPointer c : item.getChildren()) {
-                    grid.add(new String[]{c.key, "--> " + c.item.getName()});
-                }
-            }
-        }
+        ArrayList<String[]> grid = list(oRecr, oDNS);
         if (oSort) {
             Collections.sort(grid, new Comparator<String[]>() {
 
@@ -673,12 +710,72 @@ public class NagCliCfg {
             System.out.println("Nothing found to list?" + grid);
         }
     }
+
+    private ArrayList<String[]> list(boolean recursive, boolean useDNS) {
+        ArrayList<String[]> grid = new ArrayList<>();
+        if (dir == null) {
+            for (Types t : Types.values()) {
+                if (nagDb.get(t) != null) {
+                    grid.add(new String[]{t.toString(), Integer.toString(nagDb.get(t).size())});
+                } else {
+                    grid.add(new String[]{t.toString(), "0"});
+                }
+            }
+        } else if (item == null) {
+            TreeMap<String, NagItem> col = nagDb.get(dir);
+            if (col != null) {
+                for (NagItem e : col.values()) {
+                    grid.add(new String[]{e.getName(), e.getNameFields()[0].equals("name") ? "generic" : "regular"});
+                }
+            }
+        } else {
+            if (recursive) {
+                for (Map.Entry<String, String> e : item.getAllFields().entrySet()) {
+                    if (useDNS && e.getKey().equals("address")) {
+                        try {
+                            InetAddress a = InetAddress.getByName(e.getValue());
+                            grid.add(new String[]{e.getKey(), e.getValue() + " Addr=" + a.getHostAddress() + " (" + a.getCanonicalHostName() + ")"});
+                        } catch (UnknownHostException unknown) {
+                            grid.add(new String[]{e.getKey(), e.getValue() + " (DNS failed)"});
+                        }
+                    } else {
+                        grid.add(new String[]{e.getKey(), e.getValue()});
+                    }
+                }
+            } else {
+                for (Map.Entry<String, String> e : item.entrySet()) {
+                    if (useDNS && e.getKey().equals("address")) {
+                        try {
+                            InetAddress a = InetAddress.getByName(e.getValue());
+                            grid.add(new String[]{e.getKey(), e.getValue() + " Addr=" + a.getHostAddress() + " (" + a.getCanonicalHostName() + ")"});
+                        } catch (UnknownHostException unknown) {
+                            grid.add(new String[]{e.getKey(), e.getValue() + " (DNS failed)"});
+                        }
+                    } else {
+                        grid.add(new String[]{e.getKey(), e.getValue()});
+                    }
+                }
+            }
+            if (recursive) {
+                for (NagPointer c : item.getChildren()) {
+                    grid.add(new String[]{c.key, "--> " + c.item.getName()});
+                }
+            }
+        }
+        return grid;
+    }
     public static int TERMiNAL_WIDTH = 100;
 
-    private boolean set(String nvp, boolean ifExists) {
-        String[] two = splitNVP(nvp);
-        String key = two[0];
-        String val = two[1];
+    private boolean set(String nvp, boolean ifExists, boolean remove) {
+        String key, val;
+        if (!remove) {
+            String[] two = splitNVP(nvp);
+            key = two[0];
+            val = two[1];
+        } else {
+            key = nvp;
+            val = "";
+        }
         if (item == null) {
             System.out.println("No current item, cd to one first");
             return false;
@@ -687,16 +784,26 @@ public class NagCliCfg {
             if (oldVal != null && oldVal.equals(val)) {
                 return false;
             }
-            for (String nf : item.getNameFields()) {
-                if (key.equals(nf)) {
-                    rename(item.get(key), val);
-                    System.out.println("Changing '" + key + "' from '" + oldVal + "' to '" + val + "'");
-                    item.put(key, val);
-                    return true;
+            if (val.isEmpty()) {
+                for (String nf : item.getNameFields()) {
+                    if (key.equals(nf)) {
+                        System.out.println("Sorry, cannot remove/clear a field naming an object.");
+                        return false;
+                    }
                 }
             }
-            System.out.println("Changing '" + key + "' from '" + oldVal + "' to '" + val + "'");
-            item.put(key, val);
+            for (String nf : item.getNameFields()) {
+                if (key.equals(nf)) {
+                    rename(item.get(key), item.type, val);
+                }
+            }
+            if (remove) {
+                System.out.println("Removing '" + key);
+                item.remove(key);
+            } else {
+                System.out.println("Changing '" + key + "' from '" + oldVal + "' to '" + val + "'");
+                item.put(key, val);
+            }
             return true;
         } else if (!ifExists && !item.containsKey(key)) {
             System.out.println("Adding '" + key + "' as '" + val + "'");
@@ -745,25 +852,19 @@ public class NagCliCfg {
      * @param from Original name.
      * @param to New name.
      */
-    private void rename(String from, String to) {
+    private void rename(String from, Types type, String to) {
         for (NagItem e1 : all) {
             for (NagPointer e2 : e1.getChildren()) {
-                if (e2.item.getName().equals(from)) {
-                    System.out.print("Old name is refered to in field '" + e2.key + "' in object '" + e1.getType() + "." + e1.getName() + "'");
-                    String[] split = e1.get(e2.key).split(",");
-                    String sep = "";
-                    StringBuilder rep = new StringBuilder();
-                    for (String sp : split) {
-                        rep.append(sep);
-                        sep = ",";
-                        if (sp.equals(from)) {
-                            rep.append(to);
-                        } else {
-                            rep.append(sp);
-                        }
+                if (e2.item.getName().equals(from) && e2.item.getType() == type) {
+                    System.out.print("Old name is refered to in field '" + e2.key + "' in object '" + e1.getType() + "/" + e1.getName() + "'");
+                    TreeSet<String> set = e1.fieldToSet(e2.key);
+                    set.remove(from);
+                    if (!to.isEmpty()) {
+                        set.add(to);
                     }
+                    String rep = NagItem.setToField(set);
                     System.out.println(": Replacing '" + e1.get(e2.key) + "' with '" + rep + "'");
-                    e1.put(e2.key, rep.toString());
+                    e1.put(e2.key, rep);
                 }
             }
         }
@@ -868,8 +969,24 @@ public class NagCliCfg {
      *
      * @param path Where to go.
      */
-    private boolean cd(String path, boolean failIfNotExists) {
+    private boolean cd(String path, boolean failIfNotExists) throws IOException {
         String oldPath = getPath();
+        if (path.isEmpty()) {
+            ArrayList<String[]> grid = list(false, false);
+            for (int i = 0; i < grid.size(); i++) {
+                System.out.println(Integer.toString(i, 36) + ": " + grid.get(i)[0]);
+            }
+            String ch = readLine("Pick one: ");
+            int sel;
+            try {
+                sel = Integer.parseInt(ch, 36);
+            } catch (NumberFormatException ahWell) {
+                sel = -1;
+            }
+            if (sel >= 0 && sel < grid.size()) {
+                path = grid.get(sel)[0];
+            }
+        }
         if (!path.startsWith("/")) {
             path = getPath() + "/" + path;
         }
@@ -961,7 +1078,7 @@ public class NagCliCfg {
      * @param part Path part that was not found.
      * @param oldPath Original path.
      */
-    private void cdError(String part, String oldPath, boolean failIfNotExists) {
+    private void cdError(String part, String oldPath, boolean failIfNotExists) throws IOException {
         if (failIfNotExists) {
             System.out.println("Not found: '" + part + "' in " + getPath());
         }
@@ -1037,7 +1154,7 @@ public class NagCliCfg {
                                 System.exit(1);
                             }
                             if (items.containsKey(itm.getName())) {
-                                System.err.println("Unable to load configuration; duplicate items:\n" + itm + "\nand:\n" + item);
+                                System.err.println("Unable to load configuration; duplicate items:\n" + itm + "\nand:\n" + itm);
                                 System.exit(1);
                             }
                             items.put(itm.getName(), itm);
@@ -1096,12 +1213,6 @@ public class NagCliCfg {
         if (!_quiet || _echo) {
             ls("ls -rd");
         }
-    }
-
-    private void delete() {
-        System.out.println("Not implemented yet.");
-        System.out.println("You would have nuked:");
-        ls("ls -rd");
     }
 
     /**

@@ -14,17 +14,17 @@ public class HostExtInfo extends NoDepNagItem {
 
     @Override
     public String[] getNameFields() {
-        if (containsKey("host_name")) {
-            return new String[]{"host_name"};
+        if (containsKey(HOST_NAME)) {
+            return new String[]{HOST_NAME};
         }
-        return new String[]{"hostgroup_name"};
+        return new String[]{HOSTGROUP_NAME};
     }
 
     @Override
     public ArrayList<NagPointer> getChildren() {
         ArrayList<NagPointer> children = super.getChildren();
-        children.addAll(getChildren("host_name", Types.host));
-        children.addAll(getChildren("hostgroups_name", Types.hostgroup));
+        children.addAll(getChildren(HOST_NAME, Types.host));
+        children.addAll(getChildren(HOSTGROUP_NAME, Types.hostgroup));
         return children;
     }
 

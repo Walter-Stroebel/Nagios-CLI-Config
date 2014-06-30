@@ -1,5 +1,5 @@
 Here is the internal help and command usage.
-Also show an interactive session with a few simple commands, listing info about a phone device.
+Also show an interactive session with a few simple commands, using "pick one" cd, listing info about a phone device.
 
 walter@home:~$ walter@medion:~$ java -jar NagCliCfg.jar -h
 Usage: nagclicfg [parameter1,parameter2,...,parameterN]
@@ -28,17 +28,42 @@ find: find any named object or group.
 help: you are reading it.
 ifadd <field> <value>: if the field was added continue processing commands, skip to else/fi otherwise.
 ifcd <path>: cd if exists and continue processing commands, skip to else/fi otherwise.
+ifrm <field>: if the field was deleted continue processing commands, skip to else/fi otherwise.
 ifset <field> <value>: if the field was changed continue processing commands, skip to else/fi otherwise.
 ls: list the current object or group.
     -l (long) show more data (1 item per line)
     -r (refs, implies -l) also show data from referrals
     -s (sort) sort the output
     -d (dns, implies -l) attempt to resolve the 'address' field (may be slow)
+mv: context sensitive, pick from the options offered.
+pwd: shows where you really are.
 quit, exit or ^D: exit the program.
 reload: Make Nagios reload the config (write and check first!)
-rm: Delete the current object.
+rm <field>: Delete a field in the current object.
 set: set a value in the current object to a new value (see also 'add').
 write: write the entire config.
+/> cd
+0: command
+1: contact
+2: contactgroup
+3: host
+4: hostgroup
+5: service
+6: servicegroup
+7: timeperiod
+8: hostextinfo
+Pick one: 5
+/service> ls -l
+dns,Check DNS. . . . . . . . . regular
+generic-service. . . . . . . . generic
+http-servers,HTTP. . . . . . . regular
+mysql-servers,MYSQL. . . . . . regular
+nagios-servers,Check Load. . . regular
+nagios-servers,Check Users . . regular
+nagios-servers,Total Processes regular
+other,Ping only. . . . . . . . regular
+ssh-servers,SSH. . . . . . . . regular
+/service> cd /
 /> ls
 command       contact       contactgroup  host          hostgroup     service      
 servicegroup  timeperiod    hostextinfo  
@@ -52,7 +77,7 @@ service. . . 8
 servicegroup 1
 timeperiod . 4
 hostextinfo. 3
-/> cd host/snom320
+/> cd host/snom*
 /host/snom320> ls -d
 address. . snom320 Addr=10.9.0.3 (snom320)
 host_name. snom320

@@ -11,12 +11,15 @@ public class Service extends NoDepNagItem {
 
     @Override
     public String[] getNameFields() {
-        if (containsKey("service_description")&&containsKey("host_name")) {
+        if (containsKey(SERVICE_DESCRIPTION) && containsKey(NagItem.HOST_NAME)) {
             // as used as key by service_groups
-            return new String[]{"host_name","service_description"};
+            return new String[]{NagItem.HOST_NAME, SERVICE_DESCRIPTION};
         }
-        if (containsKey("hostgroup_name")){
-            return new String[]{"hostgroup_name"};
+        if (containsKey(NagItem.HOSTGROUP_NAME)) {
+            if (containsKey(SERVICE_DESCRIPTION)) {
+                return new String[]{NagItem.HOSTGROUP_NAME, SERVICE_DESCRIPTION};
+            }
+            return new String[]{NagItem.HOSTGROUP_NAME};
         }
         return super.getNameFields();
     }
@@ -26,8 +29,8 @@ public class Service extends NoDepNagItem {
         ArrayList<NagPointer> children = super.getChildren();
         children.addAll(getChildren("hostgroups", Types.hostgroup));
         children.addAll(getChildren("contact_groups", Types.contactgroup));
-        addChild(children, "host_name", Types.host);
-        addChild(children, "hostgroup_name", Types.hostgroup);
+        addChild(children, NagItem.HOST_NAME, Types.host);
+        addChild(children, NagItem.HOSTGROUP_NAME, Types.hostgroup);
         addChild(children, "use", Types.service);
         return children;
     }

@@ -16,6 +16,9 @@ import java.util.TreeSet;
  * @author walter
  */
 public abstract class NagItem extends TreeMap<String, String> {
+    public static final String SERVICE_DESCRIPTION = "service_description";
+    public static final String HOST_NAME = "host_name";
+    public static final String HOSTGROUP_NAME = "hostgroup_name";
 
     protected final Types type;
     protected final NagCliCfg owner;
@@ -154,7 +157,7 @@ public abstract class NagItem extends TreeMap<String, String> {
      * @param set To convert.
      * @return Field value of form value,value,...,value.
      */
-    public String setToField(TreeSet<String> set) {
+    public static String setToField(TreeSet<String> set) {
         StringBuilder sb = new StringBuilder();
         String sep = "";
         for (String s : set) {
