@@ -16,6 +16,7 @@ import java.util.TreeSet;
  * @author walter
  */
 public abstract class NagItem extends TreeMap<String, String> {
+
     public static final String SERVICE_DESCRIPTION = "service_description";
     public static final String HOST_NAME = "host_name";
     public static final String HOSTGROUP_NAME = "hostgroup_name";
@@ -183,7 +184,7 @@ public abstract class NagItem extends TreeMap<String, String> {
         TreeSet<String> mems;
         if (asterisk.trim().equals("*")) {
             mems = new TreeSet<>();
-            TreeMap<String,NagItem> l = owner.nagDb.get(memType);
+            TreeMap<String, NagItem> l = owner.nagDb.get(memType);
             if (l != null) {
                 for (NagItem e : l.values()) {
                     mems.add(e.getName());
@@ -228,5 +229,39 @@ public abstract class NagItem extends TreeMap<String, String> {
      */
     public ArrayList<NagPointer> members(Types memType) {
         return getChildren("members", memType);
+    }
+
+    /**
+     * Remove a name from list of names.
+     *
+     * @param fieldName Field with the list.
+     * @param name Name to remove.
+     */
+    public String removeFromList(String fieldName, String name) {
+        String asterisk = get(fieldName);
+        if (asterisk == null) {
+            return "";
+        }
+        if (asterisk.equals("*")) {
+            return "*";
+        }
+        TreeSet<String> set = fieldToSet(asterisk);
+        set.remove(name);
+        put(fieldName, setToField(set));
+        return get(fieldName);
+    }
+
+    /**
+     * Remove the indicated referral.
+     *
+     * @param ptr Referral to remove.
+     */
+    public final void removeChild(NagPointer ptr){
+        if (ptr.key.equals("parents")) {
+            String left = removeFromList(ptr.key, ptr.item.getName());
+            if (left.isEmpty()) {
+                remove(ptr.key);
+            }
+        }        
     }
 }

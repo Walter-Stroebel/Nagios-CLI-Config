@@ -5,8 +5,10 @@
 package nl.infcomtec.nagclicfg;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 
 public class ContactGroup extends NoDepNagItem {
+    private ArrayList<NagPointer> mems;
 
     public ContactGroup(NagCliCfg owner) {
         super(owner, Types.contactgroup);
@@ -14,8 +16,7 @@ public class ContactGroup extends NoDepNagItem {
 
     @Override
     public ArrayList<NagPointer> getChildren() {
-        ArrayList<NagPointer> children = 
-        super.getChildren();
+        ArrayList<NagPointer> children = super.getChildren();
         children.addAll(super.members(Types.contact));
         return children;
     }

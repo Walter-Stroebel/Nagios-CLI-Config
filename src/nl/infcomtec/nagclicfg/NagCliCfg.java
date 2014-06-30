@@ -289,6 +289,8 @@ public class NagCliCfg {
             printHelp();
         } else if (cmd.equals("quit") || cmd.equals("exit")) {
             System.exit(0);
+        } else if (cmd.equals("tree")) {
+            tree();
         } else if (cmd.startsWith("echo ")) {
             System.out.println(cmd.substring(5));
         } else if (cmd.equals("pwd")) {
@@ -367,15 +369,19 @@ public class NagCliCfg {
             ls(cmd);
         } else if (cmd.startsWith("find ")) {
             String arg = cmd.substring(4).trim().toLowerCase();
-            for (NagItem e : all) {
-                if (e.getName().toLowerCase().contains(arg)) {
-                    System.out.println("/" + e.getType().toString() + "/" + e.getName());
-                }
-            }
-        } else if (cmd.startsWith("rm")) {
+            find(arg);
+        } else if (cmd.startsWith("rm ")) {
             set(cmd.substring(3).trim(), true, true);
         } else if (cmd.startsWith("ifrm")) {
             if (set(cmd.substring(5).trim(), true, true)) {
+                doIf();
+            } else {
+                doElse();
+            }
+        } else if (cmd.equals("rmdir")) {
+            rmdir();
+        } else if (cmd.equals("ifrmdir")) {
+            if (rmdir()) {
                 doIf();
             } else {
                 doElse();
@@ -445,6 +451,7 @@ public class NagCliCfg {
 
     private void printHelp() {
         TreeSet<String> help = new TreeSet(Arrays.asList(new String[]{
+            "tree: print a tree view of the entire configuration.",
             "add: add a value to the current object (see also 'set').",
             "cd <path>: move around in the configuration, use [ls] for suggestions.",
             "check: run 'nagios -v config_file' (do this after write!)",
@@ -471,6 +478,8 @@ public class NagCliCfg {
             "quit, exit or ^D: exit the program.",
             "reload: Make Nagios reload the config (write and check first!)",
             "rm <field>: Delete a field in the current object.",
+            "rmdir: Delete the current object.",
+            "ifrmdir: if the object was deleted continue processing commands, skip to else/fi otherwise.",
             "set: set a value in the current object to a new value (see also 'add').",
             "write: write the entire config."}));
         for (String h : help) {
@@ -1266,6 +1275,57 @@ public class NagCliCfg {
                 }
             }
         }
+    }
+
+    private void find(String arg) {
+        for (Map.Entry<Types, TreeMap<String, NagItem>> top : nagDb.entrySet()) {
+            if (top.getKey().toString().toLowerCase().contains(arg)) {
+                System.out.println("/" + top.getKey());
+            }
+            for (Map.Entry<String, NagItem> obj : top.getValue().entrySet()) {
+                if (obj.getKey().toLowerCase().contains(arg)) {
+                    System.out.println("/" + top.getKey() + "/" + obj.getKey());
+                }
+                for (NagPointer ref : obj.getValue().getChildren()) {
+                    if (ref.item.getName().toLowerCase().contains(arg)) {
+                        System.out.println("/" + top.getKey() + "/" + obj.getKey() + ": " + ref.key + " ->  " + ref.item.getName());
+                    }
+                }
+            }
+        }
+    }
+
+    private void tree() {
+        for (Map.Entry<Types, TreeMap<String, NagItem>> top : nagDb.entrySet()) {
+            System.out.println(top.getKey());
+            for (Map.Entry<String, NagItem> obj : top.getValue().entrySet()) {
+                System.out.println(" +-- " + obj.getKey());
+                for (NagPointer ref : obj.getValue().getChildren()) {
+                    System.out.println(" | +-- " + ref.key + " ->  " + ref.item.getName());
+                }
+            }
+        }
+    }
+
+    private boolean rmdir() throws IOException {
+        if (item == null) {
+            System.out.println("No current item, cd to one first");
+            return false;
+        }
+        NagItem delete = item;
+        while (item != null) {
+            cd("..", false);
+        }
+        String name = delete.getName();
+        for (NagItem itm : all) {
+            for (NagPointer ptr : itm.getChildren()) {
+                if (ptr.item.getType() == delete.getType() && ptr.item.getName().equals(name)) {
+                    itm.removeChild(ptr);
+                }
+            }
+        }
+        all.remove(delete);
+        return true;
     }
 
     private static class UpdateRaw extends Thread {
