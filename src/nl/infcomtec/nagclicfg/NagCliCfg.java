@@ -262,10 +262,29 @@ public class NagCliCfg {
     private NagItem item = null;
     private final Stack<NagItem> stack = new Stack<>();
 
+    private void consolidate() {
+        nagDb.clear();
+        for (Types t : Types.values()) {
+            nagDb.put(t, new TreeMap<String, NagItem>());
+        }
+        for (Iterator<NagItem> it = all.iterator(); it.hasNext();) {
+            NagItem ni = it.next();
+            NagItem dup = get(ni.getType(), ni.getName());
+            if (dup != null) {
+                System.out.println("Note: Merging duplicate items: " + dup.getType().toString() + "/" + dup.getName());
+                dup.putAll(ni);
+                it.remove();
+            } else {
+                nagDb.get(ni.getType()).put(ni.getName(), ni);
+            }
+        }
+    }
+
     private void cli(String cmd) throws IOException {
         if (cmd.isEmpty()) {
             return;
         }
+        consolidate();
         if (cmd.equals("help")) {
             printHelp();
         } else if (cmd.equals("quit") || cmd.equals("exit")) {
@@ -494,7 +513,7 @@ public class NagCliCfg {
                             dest.put("alias", pick);
                             dest.put(NagItem.HOSTGROUP_NAME, pick);
                             dest.put("members", item.get(NagItem.HOST_NAME));
-                            lm.put(dest.getName(), dest);
+                            all.add(dest);
                         } else {
                             TreeSet<String> mems = dest.fieldToSet("members");
                             if (mems == null) {
@@ -525,6 +544,7 @@ public class NagCliCfg {
                         ServiceGroup dest = (ServiceGroup) get(Types.servicegroup, pick);
                         if (dest == null) {
                             dest = (ServiceGroup) NagItem.construct(this, Types.servicegroup);
+                            all.add(dest);
                             dest.put("alias", pick);
                             dest.put("servicegroup_name", pick);
                             lm.put(dest.getName(), dest);
@@ -557,7 +577,7 @@ public class NagCliCfg {
                             dest.put("alias", pick);
                             dest.put("servicegroup_name", pick);
                             dest.put("members", item.get(NagItem.HOST_NAME) + "," + item.get(NagItem.SERVICE_DESCRIPTION));
-                            lm.put(dest.getName(), dest);
+                            all.add(dest);
                         } else {
                             TreeSet<ServiceGroup.HostAndService> mems = dest.members();
                             mems.add(new ServiceGroup.HostAndService(item.get(NagItem.HOST_NAME), item.get(NagItem.SERVICE_DESCRIPTION)));
@@ -798,7 +818,7 @@ public class NagCliCfg {
                 }
             }
             if (remove) {
-                System.out.println("Removing '" + key);
+                System.out.println("Removing '" + key + "'");
                 item.remove(key);
             } else {
                 System.out.println("Changing '" + key + "' from '" + oldVal + "' to '" + val + "'");
@@ -1184,18 +1204,11 @@ public class NagCliCfg {
 
     private void cloneObject() throws IOException {
         NagItem ni = NagItem.construct(this, item.getType());
-        if (item.getNameFields()[0].equals("name")) {
-            // kewl, cloning a generic object
-            ni.put("use", item.getName());
-            ni.remove("name");
-        } else {
-            // ah, cloning an existing item
-            ni.putAll(item);
-        }
+        ni.putAll(item);
         while (true) {
             for (String s : ni.getNameFields()) {
                 String name = readLine("Enter a new value for " + s + ": ");
-                if (name == null) {
+                if (name == null || name.isEmpty()) {
                     return;
                 }
                 ni.put(s, name);
@@ -1206,8 +1219,7 @@ public class NagCliCfg {
                 break;
             }
         }
-        // the below should never return null so let Java throw the exception if major weird stuff is going on!
-        nagDb.get(item.type).put(ni.getName(), ni);
+        all.add(ni);
         stack.clear();
         item = ni;
         if (!_quiet || _echo) {

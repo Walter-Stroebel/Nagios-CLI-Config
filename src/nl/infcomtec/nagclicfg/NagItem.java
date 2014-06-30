@@ -29,7 +29,7 @@ public abstract class NagItem extends TreeMap<String, String> {
      * @param owner Owning object, needed for referrals.
      * @param type One of the known Nagios object types.
      */
-    public NagItem(NagCliCfg owner, Types type) {
+    protected NagItem(NagCliCfg owner, Types type) {
         this.owner = owner;
         this.type = type;
     }
