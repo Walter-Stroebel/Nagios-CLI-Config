@@ -1219,6 +1219,10 @@ public class NagCliCfg {
                 break;
             }
         }
+<<<<<<< HEAD
+=======
+        nagDb.get(item.type).put(ni.getName(), ni);
+>>>>>>> 19da47379145960720916e0a7a122d8420a52f8e
         all.add(ni);
         stack.clear();
         item = ni;
