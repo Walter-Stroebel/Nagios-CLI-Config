@@ -1,20 +1,14 @@
 # Role for installing NagCliCfg
 # Create a roles/install_nagclicfg directory
-# NagCliCfg.jar and OrgJSON.jar go in roles/install_nagclicfg/files
+# NagCliCfg.jar goes in roles/install_nagclicfg/files
 # nagclicfg.j2 goes in roles/install_nagclicfg/templates
 # This file goes in roles/install_nagclicfg/tasks as main.yml
 
 - name: create script directory
   file: path=/root/bin state=directory mode=0700
 
-- name: create script lib directory
-  file: path=/root/bin/lib state=directory mode=0700
-
-- copy: src=OrgJSON.jar dest=/root/bin/lib
-  name: copy needed libs
-
 - copy: src=NagCliCfg.jar dest=/root/bin
-  name: copy needed libs
+  name: copy jar
 
 - name: create script to start java with NagCliCfg.jar
   template: src=nagclicfg.j2 dest=/root/bin/nagclicfg mode=0700

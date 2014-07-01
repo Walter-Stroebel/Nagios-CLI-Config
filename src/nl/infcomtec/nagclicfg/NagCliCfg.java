@@ -180,7 +180,7 @@ public class NagCliCfg {
                 cli(cmd);
             }
         }
-        em.exit(0,this);
+        em.exit(0, this);
     }
 
     /**
@@ -272,7 +272,7 @@ public class NagCliCfg {
         if (cmd.equals("help")) {
             printHelp();
         } else if (cmd.equals("quit") || cmd.equals("exit")) {
-            em.exit(0,this);
+            em.exit(0, this);
         } else if (cmd.equals("tree")) {
             tree();
         } else if (cmd.startsWith("echo ")) {
@@ -293,31 +293,31 @@ public class NagCliCfg {
             diff();
         } else if (cmd.equals("dump")) {
             if (item == null) {
-                em.println("Nothing to dump, cd to an object first.");
+                em.err("Nothing to dump, cd to an object first.");
             } else {
                 NagItem rawItem;
                 synchronized (raw) {
                     rawItem = raw.get(item.getType(), item.getName());
                 }
                 if (rawItem == null) {
-                    em.println("Raw item not found (in Nagios object cache).");
-                    em.println("Maybe write, check and reload the current config first?");
-                    em.println("(anywhere)> write");
-                    em.println("(anywhere)> check");
-                    em.println("(anywhere)> reload");
+                    em.err("Raw item not found (in Nagios object cache).");
+                    em.err("Maybe write, check and reload the current config first?");
+                    em.err("(anywhere)> write");
+                    em.err("(anywhere)> check");
+                    em.err("(anywhere)> reload");
                 } else {
                     rawItem.dump(em, false);
                 }
             }
         } else if (cmd.equals("export")) {
             if (item == null) {
-                em.println("Nothing to export, cd to an object first.");
+                em.err("Nothing to export, cd to an object first.");
             } else {
                 item.dump(em, false);
             }
         } else if (cmd.equals("clone")) {
             if (item == null) {
-                em.println("Nothing to clone, cd to an object first.");
+                em.err("Nothing to clone, cd to an object first.");
             } else {
                 cloneObject();
             }
@@ -399,7 +399,7 @@ public class NagCliCfg {
 
     private void diff() throws IOException {
         if (item == null) {
-            em.println("Nothing to compare, cd to an object first.");
+            em.err("Nothing to compare, cd to an object first.");
         } else {
             NagItem rawItem;
             synchronized (raw) {
@@ -580,15 +580,15 @@ public class NagCliCfg {
                             dest.put("members", dest.membersToString(mems));
                         }
                     } else {
-                        em.println("Sorry, no move actions defined for this type of service definition.");
+                        em.err("Sorry, no move actions defined for this type of service definition.");
                     }
                     break;
                 default:
-                    em.println("Sorry, no move actions defined for a " + item.getType().toString());
+                    em.err("Sorry, no move actions defined for a " + item.getType().toString());
                     break;
             }
         } else {
-            em.println("Sorry, no move actions defined at this level.");
+            em.err("Sorry, no move actions defined at this level.");
         }
     }
 
@@ -655,6 +655,10 @@ public class NagCliCfg {
                     return;
                 }
             }
+        }
+        if (em.json) {
+            em.jsonOut.put(jsonList(oRecr, oDNS));
+            return;
         }
         ArrayList<String[]> grid = list(oRecr, oDNS);
         if (oSort) {
@@ -723,7 +727,7 @@ public class NagCliCfg {
                 }
             }
         } else {
-            em.println("Nothing found to list?" + grid);
+            em.err("Nothing found to list?" + grid);
         }
     }
 
@@ -780,6 +784,55 @@ public class NagCliCfg {
         }
         return grid;
     }
+
+    private JSONObject jsonList(boolean recursive, boolean useDNS) {
+        JSONObject ret = new JSONObject();
+        if (dir == null) {
+            for (Types t : Types.values()) {
+                if (nagDb.get(t) != null) {
+                    ret.put(t.toString(), nagDb.get(t).size());
+                } else {
+                    ret.put(t.toString(), 0);
+                }
+            }
+        } else if (item == null) {
+            TreeMap<String, NagItem> col = nagDb.get(dir);
+            if (col != null) {
+                for (NagItem e : col.values()) {
+                    ret.put(e.getName(), e.getNameFields()[0].equals("name") ? "generic" : "regular");
+                }
+            }
+        } else {
+            if (recursive) {
+                for (Map.Entry<String, String> e : item.getAllFields().entrySet()) {
+                    if (useDNS && e.getKey().equals("address")) {
+                        try {
+                            InetAddress a = InetAddress.getByName(e.getValue());
+                            ret.put(e.getKey(), e.getValue() + " Addr=" + a.getHostAddress() + " (" + a.getCanonicalHostName() + ")");
+                        } catch (UnknownHostException unknown) {
+                            ret.put(e.getKey(), e.getValue() + " (DNS failed)");
+                        }
+                    } else {
+                        ret.put(e.getKey(), e.getValue());
+                    }
+                }
+            } else {
+                for (Map.Entry<String, String> e : item.entrySet()) {
+                    if (useDNS && e.getKey().equals("address")) {
+                        try {
+                            InetAddress a = InetAddress.getByName(e.getValue());
+                            ret.put(e.getKey(), e.getValue() + " Addr=" + a.getHostAddress() + " (" + a.getCanonicalHostName() + ")");
+                        } catch (UnknownHostException unknown) {
+                            ret.put(e.getKey(), e.getValue() + " (DNS failed)");
+                        }
+                    } else {
+                        ret.put(e.getKey(), e.getValue());
+                    }
+                }
+            }
+        }
+        return ret;
+    }
     public static int TERMiNAL_WIDTH = 100;
 
     private boolean set(String nvp, boolean ifExists, boolean remove) {
@@ -793,7 +846,7 @@ public class NagCliCfg {
             val = "";
         }
         if (item == null) {
-            em.println("No current item, cd to one first");
+            em.err("No current item, cd to one first");
             return false;
         } else if (ifExists && item.containsKey(key)) {
             String oldVal = item.get(key);
@@ -803,7 +856,7 @@ public class NagCliCfg {
             if (val.isEmpty()) {
                 for (String nf : item.getNameFields()) {
                     if (key.equals(nf)) {
-                        em.println("Sorry, cannot remove/clear a field naming an object.");
+                        em.err("Sorry, cannot remove/clear a field naming an object.");
                         return false;
                     }
                 }
@@ -826,10 +879,10 @@ public class NagCliCfg {
             item.put(key, val);
             return true;
         } else if (item.containsKey(key)) {
-            em.println("Not adding '" + key + "' as '" + val + "'; item already exists. Use [set key value] instead.");
+            em.err("Not adding '" + key + "' as '" + val + "'; item already exists. Use [set key value] instead.");
             return false;
         } else {
-            em.println("Not setting '" + key + "' to '" + val + "'; not an existing item. Use [add key value] instead.");
+            em.err("Not setting '" + key + "' to '" + val + "'; not an existing item. Use [add key value] instead.");
             return false;
         }
     }
@@ -1282,12 +1335,16 @@ public class NagCliCfg {
     }
 
     private void tree() {
-        for (Map.Entry<Types, TreeMap<String, NagItem>> top : nagDb.entrySet()) {
-            em.println(top.getKey().toString());
-            for (Map.Entry<String, NagItem> obj : top.getValue().entrySet()) {
-                em.println(" +-- " + obj.getKey());
-                for (NagPointer ref : obj.getValue().getChildren()) {
-                    em.println(" | +-- " + ref.key + " ->  " + ref.item.getName());
+        if (em.json) {
+            em.jsonOut.put(jsonTree());
+        } else {
+            for (Map.Entry<Types, TreeMap<String, NagItem>> top : nagDb.entrySet()) {
+                em.println(top.getKey().toString());
+                for (Map.Entry<String, NagItem> obj : top.getValue().entrySet()) {
+                    em.println(" +-- " + obj.getKey());
+                    for (NagPointer ref : obj.getValue().getChildren()) {
+                        em.println(" | +-- " + ref.key + " ->  " + ref.item.getName());
+                    }
                 }
             }
         }
@@ -1295,7 +1352,7 @@ public class NagCliCfg {
 
     private boolean rmdir() throws IOException {
         if (item == null) {
-            em.println("No current item, cd to one first");
+            em.err("No current item, cd to one first");
             return false;
         }
         NagItem delete = item;
@@ -1314,7 +1371,7 @@ public class NagCliCfg {
         return true;
     }
 
-    JSONObject jsonTree() {
+    private JSONObject jsonTree() {
         JSONObject nag = new JSONObject();
         for (Map.Entry<Types, TreeMap<String, NagItem>> top : nagDb.entrySet()) {
             JSONObject col = new JSONObject();
@@ -1322,16 +1379,14 @@ public class NagCliCfg {
                 JSONArray itm = new JSONArray();
                 for (NagPointer ref : obj.getValue().getChildren()) {
                     JSONObject ref2 = new JSONObject();
-                    ref2.put(ref.key,ref.item.getName());
+                    ref2.put(ref.key, ref.item.getName());
                     itm.put(ref2);
                 }
                 col.put(obj.getKey(), itm);
             }
             nag.put(top.getKey().toString(), col);
         }
-        JSONObject ret= new JSONObject();
-        ret.put("nagios", nag);
-        return ret;
+        return nag;
     }
 
     private static class UpdateRaw extends Thread {

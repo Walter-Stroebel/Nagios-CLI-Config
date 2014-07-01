@@ -15,9 +15,9 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.StringTokenizer;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
@@ -32,7 +32,6 @@ public class Emitter {
     public boolean ans = false;
     public ArrayList<String> args = new ArrayList<>();
     private final StringBuilder err = new StringBuilder();
-    private final StringBuilder out = new StringBuilder();
     public boolean changed = false;
 
     public Emitter(String[] args) throws IOException {
@@ -42,11 +41,13 @@ public class Emitter {
                 quiet = true;
             } else if (opts && s.equals("-e")) {
                 echo = true;
+            } else if (opts && s.equals("-j")) {
+                json = true;
             } else if (opts && s.equals("--")) {
                 opts = false;
             } else if (s.startsWith("-")) {
                 System.out.println("Usage: nagclicfg [arguments file] | [arg1[,arg2[,...,argN]]][-q][-e][-j]");
-                System.out.println("If there is only one argument and if it is a file, we enter Ansible module mode.");
+                System.out.println("If there is only one argument and it is a valid file, we enter Ansible module mode.");
                 System.out.println("In Ansible mode the options -q and -j are in effect and arguments are read from the");
                 System.out.println("file in arg1=value1 arg2=value2 argsN=valueN format.");
                 System.out.println("In Ansible mode a few simple commands can be passed as cmd^cmd^cmd where ^ is.");
@@ -75,18 +76,14 @@ public class Emitter {
     }
 
     public void print(String s) {
-        if (json) {
-            out.append(s);
-        } else {
+        if (!json) {
             System.out.print(s);
             System.out.flush();
         }
     }
 
     public void println(String s) {
-        if (json) {
-            out.append(s).append('\n');
-        } else {
+        if (!json) {
             System.out.println(s);
         }
     }
@@ -129,8 +126,12 @@ public class Emitter {
     }
 
     public void err(Object message) {
-        err.append(message);
-        err.append('\n');
+        if (json){
+            err.append(message);
+            err.append('\n');
+        } else {
+            System.err.println(message);
+        }
     }
 
     public void failed(Object message) {
@@ -172,9 +173,9 @@ public class Emitter {
                     args.add("");
                 }
                 args.set(pi - 1, s2);
-            } else if (s1.equals("cmds")){
+            } else if (s1.equals("cmds")) {
                 System.setIn(new ByteArrayInputStream(s2.replace('^', '\n').getBytes(StandardCharsets.UTF_8)));
-            } else if (s1.equals("script")){
+            } else if (s1.equals("script")) {
                 try {
                     System.setIn(new FileInputStream(new File(s2)));
                 } catch (FileNotFoundException ex) {
@@ -185,21 +186,38 @@ public class Emitter {
             }
         }
     }
+    public final JSONArray jsonOut = new JSONArray();
 
     public void exit(int i, NagCliCfg facts) {
         if (i != 0) {
             failed("Program aborted");
         } else if (json) {
-            JSONObject o = new JSONObject();
-            o.put("changed", changed);
-            o.put("msg", out.toString());
-            if (err.length()>0){
-                o.put("warning", err.toString());
+            if (ans) {
+                JSONObject o = new JSONObject();
+                o.put("changed", changed);
+                if (err.length() > 0) {
+                    o.put("warning", err.toString());
+                }
+                if (jsonOut.length() == 1 && (jsonOut.get(0) instanceof JSONObject)) {
+                    JSONObject jo = (JSONObject) jsonOut.get(0);
+                    for (String k : jo.keySet()) {
+                        o.put(k, jo.get(k));
+                    }
+                } else if (jsonOut.length() == 1) {
+                    o.put("item", jsonOut.get(0));
+                } else if (jsonOut.length() > 0) {
+                    o.put("list", jsonOut);
+                }
+                System.out.println(o.toString(4));
+            } else {
+                if (jsonOut.length() == 1 && (jsonOut.get(0) instanceof JSONObject)) {
+                    System.out.println(((JSONObject) jsonOut.get(0)).toString(4));
+                } else if (jsonOut.length() == 1 && (jsonOut.get(0) instanceof JSONArray)) {
+                    System.out.println(((JSONArray) jsonOut.get(0)).toString(4));
+                } else {
+                    System.out.println(jsonOut.toString(4));
+                }                
             }
-            if (ans && facts != null) {
-                o.put("ansible_facts", facts.jsonTree());
-            }
-            System.out.println(o.toString(4));
         }
         System.exit(i);
     }

@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import org.json.JSONObject;
 
 /**
  *
@@ -115,17 +116,21 @@ public abstract class NagItem extends TreeMap<String, String> {
     }
 
     public void dump(Emitter em, boolean withReferals) {
-        em.println("define " + getType().toString() + " {");
-        if (withReferals) {
-            for (Map.Entry<String, String> e2 : getAllFields().entrySet()) {
-                em.println("\t" + e2.getKey() + "\t" + e2.getValue());
-            }
+        if (em.json) {
+            em.jsonOut.put(new JSONObject(withReferals ? getAllFields() : this));
         } else {
-            for (Map.Entry<String, String> e2 : entrySet()) {
-                em.println("\t" + e2.getKey() + "\t" + e2.getValue());
+            em.println("define " + getType().toString() + " {");
+            if (withReferals) {
+                for (Map.Entry<String, String> e2 : getAllFields().entrySet()) {
+                    em.println("\t" + e2.getKey() + "\t" + e2.getValue());
+                }
+            } else {
+                for (Map.Entry<String, String> e2 : entrySet()) {
+                    em.println("\t" + e2.getKey() + "\t" + e2.getValue());
+                }
             }
+            em.println("}");
         }
-        em.println("}");
     }
 
     public void dump(PrintWriter out, boolean withReferals) {
