@@ -1,11 +1,9 @@
 Nagios-CLI-Config
 =================
 
-Command line (sort of) configuration of Nagios.
+Command line configuration of Nagios and Ansible module.
 
-- 2014-06-27: Release early, release often.
-- 2014-06-28: Beta version, it works for me!
-- 2014-06-29: Functional version, now supports scripting with conditionals and parameters.
+This has swiftly become a kind of "Swiss Army Knife" for Nagios.
 
 What works:
 
@@ -21,10 +19,13 @@ What works:
 - export cooked object.
 - dump raw object.
 - idem-potent creation of object, see the createOrAdd.ncc sample script.
+- Functions as an Ansible module.
+- Remove an item, also removing it from groups and such pointing to it.
+- Rename an item, automatically updating references.
+- Low learning curve, fairly obvious commands for system managers.
+- Optional JSON output for integration in higher-level applications.
 
 TODO:
 =====
 
-- Implement commands like "Link host to service group" and so on.
-- Delete stuff.
 - Import foreign Nagios objects.
