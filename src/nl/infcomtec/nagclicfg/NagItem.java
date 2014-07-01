@@ -114,6 +114,20 @@ public abstract class NagItem extends TreeMap<String, String> {
         }
     }
 
+    public void dump(Emitter em, boolean withReferals) {
+        em.println("define " + getType().toString() + " {");
+        if (withReferals) {
+            for (Map.Entry<String, String> e2 : getAllFields().entrySet()) {
+                em.println("\t" + e2.getKey() + "\t" + e2.getValue());
+            }
+        } else {
+            for (Map.Entry<String, String> e2 : entrySet()) {
+                em.println("\t" + e2.getKey() + "\t" + e2.getValue());
+            }
+        }
+        em.println("}");
+    }
+
     public void dump(PrintWriter out, boolean withReferals) {
         out.println("define " + getType().toString() + " {");
         if (withReferals) {
@@ -126,12 +140,6 @@ public abstract class NagItem extends TreeMap<String, String> {
             }
         }
         out.println("}");
-    }
-
-    public void dump(OutputStream out, boolean withReferals) {
-        PrintWriter pw = new PrintWriter(out);
-        dump(pw, withReferals);
-        pw.flush();
     }
 
     /**
@@ -256,12 +264,12 @@ public abstract class NagItem extends TreeMap<String, String> {
      *
      * @param ptr Referral to remove.
      */
-    public final void removeChild(NagPointer ptr){
+    public final void removeChild(NagPointer ptr) {
         if (ptr.key.equals("parents")) {
             String left = removeFromList(ptr.key, ptr.item.getName());
             if (left.isEmpty()) {
                 remove(ptr.key);
             }
-        }        
+        }
     }
 }

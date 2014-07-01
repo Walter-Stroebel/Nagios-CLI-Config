@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 
 public class ContactGroup extends NoDepNagItem {
+
     private ArrayList<NagPointer> mems;
 
     public ContactGroup(NagCliCfg owner) {

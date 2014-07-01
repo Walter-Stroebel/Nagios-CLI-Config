@@ -7,7 +7,8 @@ package nl.infcomtec.nagclicfg;
 import java.util.ArrayList;
 import java.util.Map;
 
-/** For basic objects.
+/**
+ * For basic objects.
  *
  * @author walter
  */
@@ -46,10 +47,15 @@ public class NoDepNagItem extends NagItem {
     @Override
     public String[] getNameFields() {
         String fNam = type.toString() + "_name";
-        if (containsKey(fNam)) return new String[]{fNam};
-        if (containsKey("name")) return new String[]{"name"};
-        System.err.println(this);
-        throw new RuntimeException("Fatal: NagItem does not know how to name itself");
+        if (containsKey(fNam)) {
+            return new String[]{fNam};
+        }
+        if (containsKey("name")) {
+            return new String[]{"name"};
+        }
+        owner.em.err(this);
+        owner.em.failed("Fatal: NagItem does not know how to name itself");
+        return null;
     }
 
 }

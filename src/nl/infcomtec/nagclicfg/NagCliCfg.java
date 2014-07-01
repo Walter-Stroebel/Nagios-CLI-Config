@@ -27,6 +27,8 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 /**
  *
@@ -41,10 +43,8 @@ public class NagCliCfg {
     public final ArrayList<File> files = new ArrayList<>();
 
     public final static NagCliCfg raw = new NagCliCfg();
-    public static boolean _quiet = false;
-    public static boolean _echo = false;
     private BufferedReader input;
-    private ArrayList<String> args;
+    public Emitter em;
 
     public NagItem get(Types type, String name) {
         TreeMap<String, NagItem> items = nagDb.get(type);
@@ -57,29 +57,7 @@ public class NagCliCfg {
     /**
      * @param args the command line arguments
      */
-    public static void main(String[] _args) {
-        ArrayList<String> args = new ArrayList<>(Arrays.asList(_args));
-        for (Iterator<String> it = args.iterator(); it.hasNext();) {
-            String s = it.next();
-            if (s.equals("-q")) {
-                _quiet = true;
-                it.remove();
-            } else if (s.equals("-e")) {
-                _echo = true;
-                it.remove();
-            } else if (s.equals("--")) {
-                it.remove();
-                break;
-            } else if (s.startsWith("-")) {
-                System.out.println("Usage: nagclicfg [parameter1,parameter2,...,parameterN]");
-                System.out.println("The parameters can be used in commands as |%1%|, |%2%|, ..., |%N%|");
-                System.out.println("These options are supported:");
-                System.out.println("  -- stop parsing options.");
-                System.out.println("  -q (quiet) to suppress printing the prompt and banner.");
-                System.out.println("  -e (echo) print commands as read.");
-                System.exit(0);
-            }
-        }
+    public static void main(String[] args) {
         boolean configOk = false;
         if (new File(System.getProperty("user.home"), ".nagclicfg").exists()) {
             try (FileReader fr = new FileReader(new File(System.getProperty("user.home"), ".nagclicfg"))) {
@@ -111,6 +89,13 @@ public class NagCliCfg {
         TERMiNAL_WIDTH = Integer.valueOf(config.getProperty("terminal.width", "100"));
         try {
             NagCliCfg cfg = new NagCliCfg();
+            try {
+                cfg.em = new Emitter(args);
+                raw.em = cfg.em;
+            } catch (IOException ex) {
+                ex.printStackTrace();
+                System.exit(1);
+            }
             new UpdateRaw(config.getProperty("nagios.cache")).start();
             File nagCfgFile = new File(config.getProperty("nagios.config"));
             try (BufferedReader main = new BufferedReader(new FileReader(nagCfgFile))) {
@@ -133,10 +118,10 @@ public class NagCliCfg {
                                 cfg.read(f);
                                 cfg.files.add(f);
                             } else {
-                                System.err.println("File not found " + config.getProperty("nagios.config") + ": " + f);
+                                cfg.em.err("File not found " + config.getProperty("nagios.config") + ": " + f);
                             }
                         } else {
-                            System.err.println("Bad directive in " + config.getProperty("nagios.config") + ": " + fnd);
+                            cfg.em.err("Bad directive in " + config.getProperty("nagios.config") + ": " + fnd);
                         }
                     } else if (fnd.startsWith("cfg_dir")) {
                         int idx = fnd.indexOf('=');
@@ -158,21 +143,21 @@ public class NagCliCfg {
                                 }
                                 cfg.files.add(dir);
                             } else {
-                                System.err.println("Directory not found " + config.getProperty("nagios.config") + ": " + dir);
+                                cfg.em.err("Directory not found " + config.getProperty("nagios.config") + ": " + dir);
                             }
                         } else {
-                            System.err.println("Bad directive in " + config.getProperty("nagios.config") + ": " + fnd);
+                            cfg.em.err("Bad directive in " + config.getProperty("nagios.config") + ": " + fnd);
                         }
                     }
                 }
             }
-            if (!_quiet) {
-                System.out.println("Nagios command-line configurator.");
-                System.out.println("Objects loaded from " + cfg.files);
-                System.out.println("Type 'help' for some assistance.");
+            if (!cfg.em.quiet) {
+                cfg.em.println("Nagios command-line configurator.");
+                cfg.em.println("Objects loaded from " + cfg.files);
+                cfg.em.println("Type 'help' for some assistance.");
             }
             try (BufferedReader bfr = new BufferedReader(new InputStreamReader(System.in))) {
-                cfg.run(bfr, args);
+                cfg.run(bfr);
             }
         } catch (IOException ex) {
             Logger.getLogger(NagCliCfg.class.getName()).log(Level.SEVERE, null, ex);
@@ -187,15 +172,15 @@ public class NagCliCfg {
      * @param args Arguments
      * @throws IOException If it does.
      */
-    private void run(BufferedReader bfr, ArrayList<String> args) throws IOException {
+    private void run(BufferedReader bfr) throws IOException {
         this.input = bfr;
-        this.args = args;
         while (input != null) {
             String cmd = readLine(null);
             if (cmd != null) {
                 cli(cmd);
             }
         }
+        em.exit(0,this);
     }
 
     /**
@@ -209,13 +194,12 @@ public class NagCliCfg {
         if (input == null) {
             return null;
         }
-        if (!_quiet) {
+        if (!em.quiet) {
             if (prompt == null) {
-                System.out.print(getPath() + "> ");
+                em.print(getPath() + "> ");
             } else {
-                System.out.print(prompt);
+                em.print(prompt);
             }
-            System.out.flush();
         }
         String ret = input.readLine();
         if (ret == null) {
@@ -223,8 +207,8 @@ public class NagCliCfg {
         } else {
             ret = ret.trim();
             if (ret.startsWith("#") || ret.startsWith(";")) {
-                if (_echo) {
-                    System.out.println("ignoring: (" + ret + ")");
+                if (em.echo) {
+                    em.println("ignoring: (" + ret + ")");
                 }
                 return readLine(prompt);
             }
@@ -239,9 +223,9 @@ public class NagCliCfg {
                     } catch (Exception oops) {
                         // too bad
                     }
-                    if (pi > 0 && pi <= args.size()) {
+                    if (pi > 0 && pi <= em.args.size()) {
                         pi--;
-                        ret = ret.substring(0, start) + args.get(pi) + ret.substring(end + 2);
+                        ret = ret.substring(0, start) + em.args.get(pi) + ret.substring(end + 2);
                         start = ret.indexOf("|%");
                     } else {
                         // abort, bad parameter
@@ -253,8 +237,8 @@ public class NagCliCfg {
                 }
             }
         }
-        if (_echo && ret != null) {
-            System.out.println(ret);
+        if (em.echo && ret != null) {
+            em.println(ret);
         }
         return ret;
     }
@@ -271,7 +255,7 @@ public class NagCliCfg {
             NagItem ni = it.next();
             NagItem dup = get(ni.getType(), ni.getName());
             if (dup != null) {
-                System.out.println("Note: Merging duplicate items: " + dup.getType().toString() + "/" + dup.getName());
+                em.println("Note: Merging duplicate items: " + dup.getType().toString() + "/" + dup.getName());
                 dup.putAll(ni);
                 it.remove();
             } else {
@@ -288,19 +272,19 @@ public class NagCliCfg {
         if (cmd.equals("help")) {
             printHelp();
         } else if (cmd.equals("quit") || cmd.equals("exit")) {
-            System.exit(0);
+            em.exit(0,this);
         } else if (cmd.equals("tree")) {
             tree();
         } else if (cmd.startsWith("echo ")) {
-            System.out.println(cmd.substring(5));
+            em.println(cmd.substring(5));
         } else if (cmd.equals("pwd")) {
             if (dir == null) {
-                System.out.println("/");
+                em.println("/");
             } else {
                 if (item != null) {
-                    System.out.println("/" + item.getType().toString() + "/" + item.getName());
+                    em.println("/" + item.getType().toString() + "/" + item.getName());
                 } else {
-                    System.out.println("/" + dir.toString());
+                    em.println("/" + dir.toString());
                 }
             }
         } else if (cmd.equals("mv")) {
@@ -309,31 +293,31 @@ public class NagCliCfg {
             diff();
         } else if (cmd.equals("dump")) {
             if (item == null) {
-                System.out.println("Nothing to dump, cd to an object first.");
+                em.println("Nothing to dump, cd to an object first.");
             } else {
                 NagItem rawItem;
                 synchronized (raw) {
                     rawItem = raw.get(item.getType(), item.getName());
                 }
                 if (rawItem == null) {
-                    System.out.println("Raw item not found (in Nagios object cache).");
-                    System.out.println("Maybe write, check and reload the current config first?");
-                    System.out.println("(anywhere)> write");
-                    System.out.println("(anywhere)> check");
-                    System.out.println("(anywhere)> reload");
+                    em.println("Raw item not found (in Nagios object cache).");
+                    em.println("Maybe write, check and reload the current config first?");
+                    em.println("(anywhere)> write");
+                    em.println("(anywhere)> check");
+                    em.println("(anywhere)> reload");
                 } else {
-                    rawItem.dump(System.out, false);
+                    rawItem.dump(em, false);
                 }
             }
         } else if (cmd.equals("export")) {
             if (item == null) {
-                System.out.println("Nothing to export, cd to an object first.");
+                em.println("Nothing to export, cd to an object first.");
             } else {
-                item.dump(System.out, false);
+                item.dump(em, false);
             }
         } else if (cmd.equals("clone")) {
             if (item == null) {
-                System.out.println("Nothing to clone, cd to an object first.");
+                em.println("Nothing to clone, cd to an object first.");
             } else {
                 cloneObject();
             }
@@ -402,29 +386,31 @@ public class NagCliCfg {
             }
         } else if (cmd.startsWith("add")) {
             set(cmd.substring(3).trim(), false, false);
-        } else if (cmd.startsWith("write")) {
-            write();
+        } else if (cmd.equals("write")) {
+            write(false);
+        } else if (cmd.equals("firstboot")) {
+            write(true);
         } else {
-            System.out.println("Unknown cmd '" + cmd + "'");
-            System.out.println("... want to implement it?");
-            System.out.println("git clone https://github.com/Walter-Stroebel/NagCliCfg.git");
+            em.err("Unknown cmd '" + cmd + "'");
+            em.println("... want to implement it?");
+            em.println("git clone https://github.com/Walter-Stroebel/NagCliCfg.git");
         }
     }
 
     private void diff() throws IOException {
         if (item == null) {
-            System.out.println("Nothing to compare, cd to an object first.");
+            em.println("Nothing to compare, cd to an object first.");
         } else {
             NagItem rawItem;
             synchronized (raw) {
                 rawItem = raw.get(item.getType(), item.getName());
             }
             if (rawItem == null) {
-                System.out.println("Raw item not found (in Nagios object cache).");
-                System.out.println("Maybe write, check and reload the current config first?");
-                System.out.println("(anywhere)> write");
-                System.out.println("(anywhere)> check");
-                System.out.println("(anywhere)> reload");
+                em.println("Raw item not found (in Nagios object cache).");
+                em.println("Maybe write, check and reload the current config first?");
+                em.println("(anywhere)> write");
+                em.println("(anywhere)> check");
+                em.println("(anywhere)> reload");
             } else {
                 File f1 = File.createTempFile("nagclicfg", ".cfg");
                 File f2 = File.createTempFile("nagclicfg", ".cfg");
@@ -481,9 +467,10 @@ public class NagCliCfg {
             "rmdir: Delete the current object.",
             "ifrmdir: if the object was deleted continue processing commands, skip to else/fi otherwise.",
             "set: set a value in the current object to a new value (see also 'add').",
-            "write: write the entire config."}));
+            "write: write the entire config.",
+            "firstboot: write the entire config; no questios asked!"}));
         for (String h : help) {
-            System.out.println(h);
+            em.println(h);
         }
     }
 
@@ -492,26 +479,26 @@ public class NagCliCfg {
             switch (item.getType()) {
                 case service:
                     if (!item.containsKey(NagItem.SERVICE_DESCRIPTION)) {
-                        System.out.println("This service lacks a '" + NagItem.SERVICE_DESCRIPTION + "' field, [add] one first.");
+                        em.println("This service lacks a '" + NagItem.SERVICE_DESCRIPTION + "' field, [add] one first.");
                         return;
                     }
                     if (!item.containsKey(NagItem.HOST_NAME) && !item.containsKey(NagItem.HOSTGROUP_NAME)) {
-                        System.out.println("Item must have either a '" + NagItem.HOST_NAME + "' or a '" + NagItem.HOSTGROUP_NAME + "' field.");
+                        em.println("Item must have either a '" + NagItem.HOST_NAME + "' or a '" + NagItem.HOSTGROUP_NAME + "' field.");
                         return;
                     }
-                    System.out.println("Enter H to move to a Host group or S to add to a Service group");
+                    em.println("Enter H to move to a Host group or S to add to a Service group");
                     String to = readLine("H,S,Enter(do nothing): ");
                     if (to.equalsIgnoreCase("h") && item.containsKey(NagItem.HOST_NAME)) {
-                        System.out.println("Moving this service to a host group.");
-                        System.out.println("- Create a new host group, just type a new name.");
+                        em.println("Moving this service to a host group.");
+                        em.println("- Create a new host group, just type a new name.");
                         TreeMap<String, NagItem> lm = nagDb.get(Types.hostgroup);
                         if (lm == null) {
                             nagDb.put(dir, lm = new TreeMap<>());
                         }
                         for (NagItem e : lm.values()) {
-                            System.out.println("- Existing group '" + e.getName() + "'");
+                            em.println("- Existing group '" + e.getName() + "'");
                         }
-                        System.out.println("- [enter] to do nothing.");
+                        em.println("- [enter] to do nothing.");
                         String pick = readLine("Pick one: ");
                         if (pick.isEmpty()) {
                             return;
@@ -536,16 +523,16 @@ public class NagCliCfg {
                         item.put("hostgroup_name", pick);
                     } else if (to.equalsIgnoreCase("s") && item.containsKey(NagItem.HOSTGROUP_NAME)) {
                         String hgn = item.get(NagItem.HOSTGROUP_NAME);
-                        System.out.println("Adding all hosts from hostgroup '" + hgn + "' to a service group.");
-                        System.out.println("- Create a new service group, just type a new name.");
+                        em.println("Adding all hosts from hostgroup '" + hgn + "' to a service group.");
+                        em.println("- Create a new service group, just type a new name.");
                         TreeMap<String, NagItem> lm = nagDb.get(Types.servicegroup);
                         if (lm == null) {
                             nagDb.put(dir, lm = new TreeMap<>());
                         }
                         for (NagItem e : lm.values()) {
-                            System.out.println("- Existing group '" + e.getName() + "'");
+                            em.println("- Existing group '" + e.getName() + "'");
                         }
-                        System.out.println("- [enter] to do nothing.");
+                        em.println("- [enter] to do nothing.");
                         String pick = readLine("Pick one: ");
                         if (pick.isEmpty()) {
                             return;
@@ -566,16 +553,16 @@ public class NagCliCfg {
                         }
                         dest.put("members", dest.membersToString(mems));
                     } else if (to.equalsIgnoreCase("s") && item.containsKey(NagItem.HOST_NAME)) {
-                        System.out.println("Adding this service to a service group.");
-                        System.out.println("- Create a new service group, just type a new name.");
+                        em.println("Adding this service to a service group.");
+                        em.println("- Create a new service group, just type a new name.");
                         TreeMap<String, NagItem> lm = nagDb.get(Types.servicegroup);
                         if (lm == null) {
                             nagDb.put(dir, lm = new TreeMap<>());
                         }
                         for (NagItem e : lm.values()) {
-                            System.out.println("- Existing group '" + e.getName() + "'");
+                            em.println("- Existing group '" + e.getName() + "'");
                         }
-                        System.out.println("- [enter] to do nothing.");
+                        em.println("- [enter] to do nothing.");
                         String pick = readLine("Pick one: ");
                         if (pick.isEmpty()) {
                             return;
@@ -593,15 +580,15 @@ public class NagCliCfg {
                             dest.put("members", dest.membersToString(mems));
                         }
                     } else {
-                        System.out.println("Sorry, no move actions defined for this type of service definition.");
+                        em.println("Sorry, no move actions defined for this type of service definition.");
                     }
                     break;
                 default:
-                    System.out.println("Sorry, no move actions defined for a " + item.getType().toString());
+                    em.println("Sorry, no move actions defined for a " + item.getType().toString());
                     break;
             }
         } else {
-            System.out.println("Sorry, no move actions defined at this level.");
+            em.println("Sorry, no move actions defined at this level.");
         }
     }
 
@@ -664,7 +651,7 @@ public class NagCliCfg {
                     oDNS = true;
                     oLong = true;
                 } else {
-                    System.out.println("Unknown option " + c + " for ls");
+                    em.println("Unknown option " + c + " for ls");
                     return;
                 }
             }
@@ -701,11 +688,11 @@ public class NagCliCfg {
                 for (int i = 0; i < grid.size(); i += c) {
                     String sep = "";
                     for (int j = 0; j < c && (i + j) < grid.size(); j++) {
-                        System.out.print(sep);
+                        em.print(sep);
                         sep = " ";
-                        System.out.format(fmt, grid.get(i + j)[0]);
+                        em.print(String.format(fmt, grid.get(i + j)[0]));
                     }
-                    System.out.println();
+                    em.println();
                 }
             } else {
                 if (m0 > TERMiNAL_WIDTH / 2) {
@@ -721,22 +708,22 @@ public class NagCliCfg {
                     }
                     StringBuilder sb = new StringBuilder(String.format(fmt, k));
                     sb = new StringBuilder(sb.reverse().toString().replace("  ", " ."));
-                    System.out.print(sb.reverse());
+                    em.print(sb.reverse().toString());
                     String v = e[1];
                     while (true) {
                         if (v.length() > m1) {
-                            System.out.println(v.substring(0, m1));
+                            em.println(v.substring(0, m1));
                             v = v.substring(m1);
-                            System.out.print(rep);
+                            em.print(rep.toString());
                         } else {
-                            System.out.println(v);
+                            em.println(v);
                             break;
                         }
                     }
                 }
             }
         } else {
-            System.out.println("Nothing found to list?" + grid);
+            em.println("Nothing found to list?" + grid);
         }
     }
 
@@ -806,7 +793,7 @@ public class NagCliCfg {
             val = "";
         }
         if (item == null) {
-            System.out.println("No current item, cd to one first");
+            em.println("No current item, cd to one first");
             return false;
         } else if (ifExists && item.containsKey(key)) {
             String oldVal = item.get(key);
@@ -816,7 +803,7 @@ public class NagCliCfg {
             if (val.isEmpty()) {
                 for (String nf : item.getNameFields()) {
                     if (key.equals(nf)) {
-                        System.out.println("Sorry, cannot remove/clear a field naming an object.");
+                        em.println("Sorry, cannot remove/clear a field naming an object.");
                         return false;
                     }
                 }
@@ -827,22 +814,22 @@ public class NagCliCfg {
                 }
             }
             if (remove) {
-                System.out.println("Removing '" + key + "'");
+                em.println("Removing '" + key + "'");
                 item.remove(key);
             } else {
-                System.out.println("Changing '" + key + "' from '" + oldVal + "' to '" + val + "'");
+                em.println("Changing '" + key + "' from '" + oldVal + "' to '" + val + "'");
                 item.put(key, val);
             }
             return true;
         } else if (!ifExists && !item.containsKey(key)) {
-            System.out.println("Adding '" + key + "' as '" + val + "'");
+            em.println("Adding '" + key + "' as '" + val + "'");
             item.put(key, val);
             return true;
         } else if (item.containsKey(key)) {
-            System.out.println("Not adding '" + key + "' as '" + val + "'; item already exists. Use [set key value] instead.");
+            em.println("Not adding '" + key + "' as '" + val + "'; item already exists. Use [set key value] instead.");
             return false;
         } else {
-            System.out.println("Not setting '" + key + "' to '" + val + "'; not an existing item. Use [add key value] instead.");
+            em.println("Not setting '" + key + "' to '" + val + "'; not an existing item. Use [add key value] instead.");
             return false;
         }
     }
@@ -885,14 +872,14 @@ public class NagCliCfg {
         for (NagItem e1 : all) {
             for (NagPointer e2 : e1.getChildren()) {
                 if (e2.item.getName().equals(from) && e2.item.getType() == type) {
-                    System.out.print("Old name is refered to in field '" + e2.key + "' in object '" + e1.getType() + "/" + e1.getName() + "'");
+                    em.print("Old name is refered to in field '" + e2.key + "' in object '" + e1.getType() + "/" + e1.getName() + "'");
                     TreeSet<String> set = e1.fieldToSet(e2.key);
                     set.remove(from);
                     if (!to.isEmpty()) {
                         set.add(to);
                     }
                     String rep = NagItem.setToField(set);
-                    System.out.println(": Replacing '" + e1.get(e2.key) + "' with '" + rep + "'");
+                    em.println(": Replacing '" + e1.get(e2.key) + "' with '" + rep + "'");
                     e1.put(e2.key, rep);
                 }
             }
@@ -902,7 +889,7 @@ public class NagCliCfg {
     /**
      * Write this configuration to the Nagios configuration directory.
      */
-    private void write() throws IOException {
+    private void write(boolean override) throws IOException {
         boolean isNagCliCfg = true;
         File nagCfg = new File(config.getProperty("nagios.config"));
         File nagDir = nagCfg.getParentFile();
@@ -914,45 +901,49 @@ public class NagCliCfg {
             }
         }
         if (!isNagCliCfg) {
-            if (_quiet) {
-                System.err.println("Nagios is not yet configured by NagcliCfg and using batch mode.");
-                System.err.println("Skipping write command (no changes are made nor saved!)");
-            }
-            System.out.println("Warning! This might restructure your current Nagios configuration completely!");
-            System.out.println("The following directive will be disabled in " + config.getProperty("nagios.config") + ":");
-            for (File f : files) {
-                if (!f.getName().startsWith("ngcli_")) {
-                    if (f.isDirectory()) {
-                        System.out.println("cfg_dir=" + f.getAbsolutePath());
-                    } else {
-                        System.out.println("cfg_file=" + f.getAbsolutePath());
+            if (!override) {
+                if (em.quiet) {
+                    em.err("Nagios is not yet configured by NagcliCfg and using batch mode.");
+                    em.err("Skipping write command (no changes are made nor saved!)");
+                }
+                em.println("Warning! This might restructure your current Nagios configuration completely!");
+                em.println("The following directive will be disabled in " + config.getProperty("nagios.config") + ":");
+                for (File f : files) {
+                    if (!f.getName().startsWith("ngcli_")) {
+                        if (f.isDirectory()) {
+                            em.println("cfg_dir=" + f.getAbsolutePath());
+                        } else {
+                            em.println("cfg_file=" + f.getAbsolutePath());
+                        }
                     }
                 }
-            }
-            System.out.println("They will be replaced with one directive: cfg_dir=nagclicfg.d");
-            System.out.println("In that directory, files will be created for each object type.");
-            System.out.println("You can return to your old setup by inverting those modifications.");
-            System.out.println("Are you sure you want to do this (ie. you *HAVE* a backup)?");
-            String yes = readLine("Type YES to continue: ");
-            if (yes == null || !"YES".equals(yes)) {
-                return;
+                em.println("They will be replaced with one directive: cfg_dir=nagclicfg.d");
+                em.println("In that directory, files will be created for each object type.");
+                em.println("You can return to your old setup by inverting those modifications.");
+                em.println("Are you sure you want to do this (ie. you *HAVE* a backup)?");
+                String yes = readLine("Type YES to continue: ");
+                if (yes == null || !"YES".equals(yes)) {
+                    return;
+                }
             }
             if (!cfgDir.exists()) {
                 if (!cfgDir.mkdir()) {
-                    System.err.println("Failed to create " + cfgDir.getAbsolutePath() + " ... not root?");
-                    System.err.println("Write aborted (nothing was changed).");
+                    em.err("Failed to create " + cfgDir.getAbsolutePath() + " ... not root?");
+                    em.err("Write aborted (nothing was changed).");
                 }
             }
             boolean didDelete = nagBak.delete();
             if (!nagCfg.renameTo(nagBak)) {
-                System.err.println("Failed to backup old " + config.getProperty("nagios.config") + " ... not root?");
+                em.err("Failed to backup old " + config.getProperty("nagios.config") + " ... not root?");
                 if (!didDelete) {
-                    System.err.println("Write aborted (nothing was changed).");
+                    em.err("Write aborted (nothing was changed).");
                 } else {
-                    System.err.println("Deleted old backup file " + nagBak.getAbsolutePath() + "; nothing else was changed.");
+                    em.err("Deleted old backup file " + nagBak.getAbsolutePath() + "; nothing else was changed.");
+                    em.changed = true;
                 }
                 return;
             }
+            em.changed = true;
             try (PrintWriter pw = new PrintWriter(nagCfg)) {
                 try (BufferedReader main = new BufferedReader(new FileReader(nagBak))) {
                     for (String fnd = main.readLine(); fnd != null; fnd = main.readLine()) {
@@ -988,7 +979,7 @@ public class NagCliCfg {
                     e.dump(out, false);
                 }
             } catch (FileNotFoundException ex) {
-                ex.printStackTrace();
+                em.failed(ex);
             }
         }
     }
@@ -1003,7 +994,7 @@ public class NagCliCfg {
         if (path.isEmpty()) {
             ArrayList<String[]> grid = list(false, false);
             for (int i = 0; i < grid.size(); i++) {
-                System.out.println(Integer.toString(i, 36) + ": " + grid.get(i)[0]);
+                em.println(Integer.toString(i, 36) + ": " + grid.get(i)[0]);
             }
             String ch = readLine("Pick one: ");
             int sel;
@@ -1109,7 +1100,7 @@ public class NagCliCfg {
      */
     private void cdError(String part, String oldPath, boolean failIfNotExists) throws IOException {
         if (failIfNotExists) {
-            System.out.println("Not found: '" + part + "' in " + getPath());
+            em.println("Not found: '" + part + "' in " + getPath());
         }
         cd(oldPath, true);
     }
@@ -1153,7 +1144,7 @@ public class NagCliCfg {
                 if (s.isEmpty()) {
                     continue;
                 }
-                //System.out.println(s);
+                //em.println(s);
                 if (s.startsWith("define ")) {
                     StringTokenizer toker = new StringTokenizer(s, " {");
                     toker.nextToken();
@@ -1179,32 +1170,28 @@ public class NagCliCfg {
                         }
                         if (s2.equals("}")) {
                             if (itm.getNameFields().length == 0 || itm.getName() == null) {
-                                System.err.println("Fatal error for " + itm + "; cannot handle unnamed items.");
-                                System.exit(1);
+                                em.failed("Fatal error for " + itm + "; cannot handle unnamed items.");
                             }
                             if (items.containsKey(itm.getName())) {
-                                System.err.println("Unable to load configuration; duplicate items:\n" + itm + "\nand:\n" + itm);
-                                System.exit(1);
+                                em.failed("Unable to load configuration; duplicate items:\n" + itm + "\nand:\n" + itm);
                             }
                             items.put(itm.getName(), itm);
                             all.add(itm);
                             break;
                         }
-                        //System.out.println(s2);
+                        //em.println(s2);
                         String[] parts = splitNVP(s2);
                         if (parts.length != 2) {
-                            System.out.println(Arrays.toString(parts));
-                            System.exit(1);
+                            em.failed("Not two elements: " + Arrays.toString(parts));
                         } else {
                             itm.put(parts[0], parts[1]);
                         }
                     }
                     if (itm.getName() == null || itm.getName().isEmpty()) {
-                        System.err.println("Invalid object found: " + itm);
-                        System.exit(1);
+                        em.failed("Invalid object found: " + itm);
                     }
                 } else {
-                    System.out.println(s);
+                    em.println(s);
                     break;
                 }
             }
@@ -1223,7 +1210,7 @@ public class NagCliCfg {
                 ni.put(s, name);
             }
             if (nagDb.get(item.getType()).containsKey(ni.getName())) {
-                System.err.println("Duplicate name!");
+                em.err("Duplicate name!");
             } else {
                 break;
             }
@@ -1231,7 +1218,7 @@ public class NagCliCfg {
         all.add(ni);
         stack.clear();
         item = ni;
-        if (!_quiet || _echo) {
+        if (!em.quiet || em.echo) {
             ls("ls -rd");
         }
     }
@@ -1247,7 +1234,6 @@ public class NagCliCfg {
         nagDb.clear();
         stack.clear();
         input = null;
-        args = null;
     }
 
     /**
@@ -1280,15 +1266,15 @@ public class NagCliCfg {
     private void find(String arg) {
         for (Map.Entry<Types, TreeMap<String, NagItem>> top : nagDb.entrySet()) {
             if (top.getKey().toString().toLowerCase().contains(arg)) {
-                System.out.println("/" + top.getKey());
+                em.println("/" + top.getKey());
             }
             for (Map.Entry<String, NagItem> obj : top.getValue().entrySet()) {
                 if (obj.getKey().toLowerCase().contains(arg)) {
-                    System.out.println("/" + top.getKey() + "/" + obj.getKey());
+                    em.println("/" + top.getKey() + "/" + obj.getKey());
                 }
                 for (NagPointer ref : obj.getValue().getChildren()) {
                     if (ref.item.getName().toLowerCase().contains(arg)) {
-                        System.out.println("/" + top.getKey() + "/" + obj.getKey() + ": " + ref.key + " ->  " + ref.item.getName());
+                        em.println("/" + top.getKey() + "/" + obj.getKey() + ": " + ref.key + " ->  " + ref.item.getName());
                     }
                 }
             }
@@ -1297,11 +1283,11 @@ public class NagCliCfg {
 
     private void tree() {
         for (Map.Entry<Types, TreeMap<String, NagItem>> top : nagDb.entrySet()) {
-            System.out.println(top.getKey());
+            em.println(top.getKey().toString());
             for (Map.Entry<String, NagItem> obj : top.getValue().entrySet()) {
-                System.out.println(" +-- " + obj.getKey());
+                em.println(" +-- " + obj.getKey());
                 for (NagPointer ref : obj.getValue().getChildren()) {
-                    System.out.println(" | +-- " + ref.key + " ->  " + ref.item.getName());
+                    em.println(" | +-- " + ref.key + " ->  " + ref.item.getName());
                 }
             }
         }
@@ -1309,7 +1295,7 @@ public class NagCliCfg {
 
     private boolean rmdir() throws IOException {
         if (item == null) {
-            System.out.println("No current item, cd to one first");
+            em.println("No current item, cd to one first");
             return false;
         }
         NagItem delete = item;
@@ -1328,6 +1314,26 @@ public class NagCliCfg {
         return true;
     }
 
+    JSONObject jsonTree() {
+        JSONObject nag = new JSONObject();
+        for (Map.Entry<Types, TreeMap<String, NagItem>> top : nagDb.entrySet()) {
+            JSONObject col = new JSONObject();
+            for (Map.Entry<String, NagItem> obj : top.getValue().entrySet()) {
+                JSONArray itm = new JSONArray();
+                for (NagPointer ref : obj.getValue().getChildren()) {
+                    JSONObject ref2 = new JSONObject();
+                    ref2.put(ref.key,ref.item.getName());
+                    itm.put(ref2);
+                }
+                col.put(obj.getKey(), itm);
+            }
+            nag.put(top.getKey().toString(), col);
+        }
+        JSONObject ret= new JSONObject();
+        ret.put("nagios", nag);
+        return ret;
+    }
+
     private static class UpdateRaw extends Thread {
 
         private final File rawFile;
@@ -1344,7 +1350,7 @@ public class NagCliCfg {
                     try {
                         raw.read(rawFile);
                     } catch (IOException ex) {
-                        System.err.println("Failed to read Nagios object cache: " + ex.getMessage());
+                        raw.em.failed("Failed to read Nagios object cache: " + ex.getMessage());
                     }
                 }
             }

@@ -12,5 +12,5 @@ import java.util.TreeSet;
  */
 public enum Types {
 
-    command, contact, contactgroup, host, hostgroup, service, servicegroup, timeperiod,hostextinfo;
+    command, contact, contactgroup, host, hostgroup, service, servicegroup, timeperiod, hostextinfo;
 }
