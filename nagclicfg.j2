@@ -1,6 +1,6 @@
 #!/bin/bash
-if [ -f {{ NagCliCfg_jar }} ] ; then
-  java -jar {{ NagCliCfg_jar }} $*
+if [ -f {{ item }} ] ; then
+  java -jar {{ item }} $*
 else
   echo Please fix $0 and tell it where NagCliCfg.jar lives on your system.
 fi
