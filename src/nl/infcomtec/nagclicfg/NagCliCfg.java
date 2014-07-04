@@ -13,6 +13,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -21,6 +23,7 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Random;
 import java.util.Stack;
 import java.util.StringTokenizer;
 import java.util.TreeMap;
@@ -54,6 +57,52 @@ public class NagCliCfg {
         return null;
     }
 
+    public void singleUser() throws UnknownHostException {
+        InetAddress bindAddress = InetAddress.getByName(config.getProperty("control.address", "127.0.0.1"));
+        int port = Integer.parseInt(config.getProperty("control.port", "27411"));
+        try {
+            final ServerSocket control = new ServerSocket(port, 2, bindAddress);
+            new Thread() {
+
+                @Override
+                public void run() {
+                    while (true) {
+                        try (Socket client = control.accept()) {
+                            client.getOutputStream().write('!');
+                        } catch (IOException ex) {
+                            Logger.getLogger(NagCliCfg.class.getName()).log(Level.SEVERE, null, ex);
+                        }
+                    }
+                }
+            }.start();
+        } catch (Exception oops) {
+            if (em.json) {
+                em.err("Utility is in use, waiting up to one minute");
+                long start = System.currentTimeMillis();
+                Random rnd = new Random();
+                while (System.currentTimeMillis() < 60000) {
+                    try {
+                        Thread.sleep(500 + rnd.nextInt(1000));
+                    } catch (InterruptedException ex) {
+                        Logger.getLogger(NagCliCfg.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+                    // automated mode, lets wait a while
+                    try (Socket s = new Socket(bindAddress, port)) {
+                        if (s.getInputStream().read() != '!') {
+                            em.failed("While waiting to run we got something else than a !");
+                        }
+                    } catch (IOException ex) {
+                        // good news!
+                        singleUser();
+                        return;
+                    }
+                }
+            } else {
+                em.failed("Someone else is using this utility. Please investigate or wait and try again.");
+            }
+        }
+    }
+
     /**
      * @param args the command line arguments
      */
@@ -77,6 +126,8 @@ public class NagCliCfg {
             config.setProperty("nagios.config", config.getProperty("nagios.config", "/etc/nagios3/nagios.cfg"));
             config.setProperty("nagios.reload", config.getProperty("nagios.reload", "/etc/init.d/nagios3 reload"));
             config.setProperty("terminal.width", config.getProperty("terminal.width", "100"));
+            config.setProperty("control.address", config.getProperty("control.address", "127.0.0.1"));
+            config.setProperty("control.port", config.getProperty("control.port", "27411"));
             System.err.println("No configuration found. Below is a sample property file.");
             System.err.println("Adjust as needed and save as " + System.getProperty("user.home") + "/.nagclicfg");
             try {
@@ -91,6 +142,7 @@ public class NagCliCfg {
             NagCliCfg cfg = new NagCliCfg();
             try {
                 cfg.em = new Emitter(args);
+                cfg.singleUser();
                 raw.em = cfg.em;
             } catch (IOException ex) {
                 ex.printStackTrace();
@@ -175,7 +227,7 @@ public class NagCliCfg {
     private void run(BufferedReader bfr) throws IOException {
         this.input = bfr;
         while (input != null) {
-            String cmd = readLine(null);
+            String cmd = readLine(null, false);
             if (cmd != null) {
                 cli(cmd);
             }
@@ -190,7 +242,7 @@ public class NagCliCfg {
      * @return Next line or null on EOF.
      * @throws IOException If it does.
      */
-    private String readLine(String prompt) throws IOException {
+    public String readLine(String prompt, boolean skipping) throws IOException {
         if (input == null) {
             return null;
         }
@@ -210,7 +262,7 @@ public class NagCliCfg {
                 if (em.echo) {
                     em.println("ignoring: (" + ret + ")");
                 }
-                return readLine(prompt);
+                return readLine(prompt, false);
             }
             int start = ret.indexOf("|%");
             while (start >= 0) {
@@ -238,7 +290,7 @@ public class NagCliCfg {
             }
         }
         if (em.echo && ret != null) {
-            em.println(ret);
+            em.println((skipping ? "skipping: " : "") + ret);
         }
         return ret;
     }
@@ -289,6 +341,8 @@ public class NagCliCfg {
             }
         } else if (cmd.equals("mv")) {
             move();
+        } else if (cmd.equals("define")) {
+            define();
         } else if (cmd.equals("diff")) {
             diff();
         } else if (cmd.equals("dump")) {
@@ -330,6 +384,7 @@ public class NagCliCfg {
         } else if (cmd.startsWith("cd")) {
             cd(cmd.substring(2).trim(), true);
         } else if (cmd.startsWith("reload")) {
+            em.changed = true;
             ProcessBuilder pb = new ProcessBuilder(("/bin/sh " + config.getProperty("nagios.reload")).split(" "));
             pb.redirectErrorStream(true);
             pb.inheritIO();
@@ -468,9 +523,21 @@ public class NagCliCfg {
             "ifrmdir: if the object was deleted continue processing commands, skip to else/fi otherwise.",
             "set: set a value in the current object to a new value (see also 'add').",
             "write: write the entire config.",
+            "define: context sensitive, will ask the required items for the object being defined.",
             "firstboot: write the entire config; no questios asked!"}));
         for (String h : help) {
             em.println(h);
+        }
+    }
+
+    private void define() throws IOException {
+        if (dir == null) {
+            em.err("No idea what you want to define, cd to some type of object first.");
+        } else {
+            item = NagItem.define(this, dir);
+            if (item != null) {
+                all.add(item);
+            }
         }
     }
 
@@ -487,7 +554,7 @@ public class NagCliCfg {
                         return;
                     }
                     em.println("Enter H to move to a Host group or S to add to a Service group");
-                    String to = readLine("H,S,Enter(do nothing): ");
+                    String to = readLine("H,S,Enter(do nothing): ", false);
                     if (to.equalsIgnoreCase("h") && item.containsKey(NagItem.HOST_NAME)) {
                         em.println("Moving this service to a host group.");
                         em.println("- Create a new host group, just type a new name.");
@@ -499,14 +566,14 @@ public class NagCliCfg {
                             em.println("- Existing group '" + e.getName() + "'");
                         }
                         em.println("- [enter] to do nothing.");
-                        String pick = readLine("Pick one: ");
+                        String pick = readLine("Pick one: ", false);
                         if (pick.isEmpty()) {
                             return;
                         }
                         NagItem dest = get(Types.hostgroup, pick);
                         if (dest == null) {
                             dest = NagItem.construct(this, Types.hostgroup);
-                            dest.put("alias", pick);
+                            dest.put(NagItem.ALIAS, pick);
                             dest.put(NagItem.HOSTGROUP_NAME, pick);
                             dest.put("members", item.get(NagItem.HOST_NAME));
                             all.add(dest);
@@ -520,7 +587,7 @@ public class NagCliCfg {
                             }
                         }
                         item.remove(NagItem.HOST_NAME);
-                        item.put("hostgroup_name", pick);
+                        item.put(NagItem.HOSTGROUP_NAME, pick);
                     } else if (to.equalsIgnoreCase("s") && item.containsKey(NagItem.HOSTGROUP_NAME)) {
                         String hgn = item.get(NagItem.HOSTGROUP_NAME);
                         em.println("Adding all hosts from hostgroup '" + hgn + "' to a service group.");
@@ -533,7 +600,7 @@ public class NagCliCfg {
                             em.println("- Existing group '" + e.getName() + "'");
                         }
                         em.println("- [enter] to do nothing.");
-                        String pick = readLine("Pick one: ");
+                        String pick = readLine("Pick one: ", false);
                         if (pick.isEmpty()) {
                             return;
                         }
@@ -541,7 +608,7 @@ public class NagCliCfg {
                         if (dest == null) {
                             dest = (ServiceGroup) NagItem.construct(this, Types.servicegroup);
                             all.add(dest);
-                            dest.put("alias", pick);
+                            dest.put(NagItem.ALIAS, pick);
                             dest.put("servicegroup_name", pick);
                             lm.put(dest.getName(), dest);
                         }
@@ -563,14 +630,14 @@ public class NagCliCfg {
                             em.println("- Existing group '" + e.getName() + "'");
                         }
                         em.println("- [enter] to do nothing.");
-                        String pick = readLine("Pick one: ");
+                        String pick = readLine("Pick one: ", false);
                         if (pick.isEmpty()) {
                             return;
                         }
                         ServiceGroup dest = (ServiceGroup) get(Types.servicegroup, pick);
                         if (dest == null) {
                             dest = (ServiceGroup) NagItem.construct(this, Types.servicegroup);
-                            dest.put("alias", pick);
+                            dest.put(NagItem.ALIAS, pick);
                             dest.put("servicegroup_name", pick);
                             dest.put("members", item.get(NagItem.HOST_NAME) + "," + item.get(NagItem.SERVICE_DESCRIPTION));
                             all.add(dest);
@@ -595,7 +662,7 @@ public class NagCliCfg {
     private void doElse() throws IOException {
         if (skip("fi", "else").equals("else")) {
             while (true) {
-                String cmd2 = readLine(null);
+                String cmd2 = readLine(null, false);
                 if (cmd2 == null) {
                     return;
                 } else {
@@ -611,7 +678,7 @@ public class NagCliCfg {
 
     private void doIf() throws IOException {
         while (true) {
-            String cmd2 = readLine(null);
+            String cmd2 = readLine(null, false);
             if (cmd2 == null) {
                 return;
             } else {
@@ -974,7 +1041,7 @@ public class NagCliCfg {
                 em.println("In that directory, files will be created for each object type.");
                 em.println("You can return to your old setup by inverting those modifications.");
                 em.println("Are you sure you want to do this (ie. you *HAVE* a backup)?");
-                String yes = readLine("Type YES to continue: ");
+                String yes = readLine("Type YES to continue: ", false);
                 if (yes == null || !"YES".equals(yes)) {
                     return;
                 }
@@ -1049,7 +1116,7 @@ public class NagCliCfg {
             for (int i = 0; i < grid.size(); i++) {
                 em.println(Integer.toString(i, 36) + ": " + grid.get(i)[0]);
             }
-            String ch = readLine("Pick one: ");
+            String ch = readLine("Pick one: ", false);
             int sel;
             try {
                 sel = Integer.parseInt(ch, 36);
@@ -1191,7 +1258,7 @@ public class NagCliCfg {
         try (BufferedReader bfr = new BufferedReader(new FileReader(f))) {
             for (String s = bfr.readLine(); s != null; s = bfr.readLine()) {
                 s = s.trim();
-                if (s.startsWith("#")) {
+                if (s.startsWith("#") || s.startsWith(";")) {
                     continue;
                 }
                 if (s.isEmpty()) {
@@ -1215,7 +1282,7 @@ public class NagCliCfg {
                     }
                     for (String s2 = bfr.readLine(); s2 != null; s2 = bfr.readLine()) {
                         s2 = s2.trim();
-                        if (s2.startsWith("#")) {
+                        if (s2.startsWith("#") || s.startsWith(";")) {
                             continue;
                         }
                         if (s2.isEmpty()) {
@@ -1256,7 +1323,7 @@ public class NagCliCfg {
         ni.putAll(item);
         while (true) {
             for (String s : ni.getNameFields()) {
-                String name = readLine("Enter a new value for " + s + ": ");
+                String name = readLine("Enter a new value for " + s + ": ", false);
                 if (name == null || name.isEmpty()) {
                     return;
                 }
@@ -1300,7 +1367,7 @@ public class NagCliCfg {
     private String skip(String... until) throws IOException {
         TreeSet<String> _until = new TreeSet<>(Arrays.asList(until));
         while (true) {
-            String skip = readLine(null);
+            String skip = readLine(null, true);
             if (skip == null) {
                 // artifact, force end of processing
                 return "fi";

@@ -11,7 +11,7 @@ public class HostGroup extends NoDepNagItem {
     public HostGroup(NagCliCfg owner) {
         super(owner, Types.hostgroup);
     }
-
+    
     @Override
     public ArrayList<NagPointer> getChildren() {
         ArrayList<NagPointer> children = super.getChildren();
