@@ -53,4 +53,9 @@ public class NagPointerDef implements Comparable<NagPointerDef> {
         return byField.compareTo(o.byField);
     }
 
+    @Override
+    public String toString() {
+        return "NagPointerDef{" + "from=" + from + ", byField=" + byField + ", to=" + to + ", stride=" + stride + '}';
+    }
+
 }

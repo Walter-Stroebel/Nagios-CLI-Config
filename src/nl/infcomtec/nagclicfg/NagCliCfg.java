@@ -203,6 +203,7 @@ public class NagCliCfg {
                     }
                 }
             }
+            cfg.consolidate();
             if (!cfg.em.quiet) {
                 cfg.em.println("Nagios command-line configurator.");
                 cfg.em.println("Objects loaded from " + cfg.files);
@@ -313,6 +314,9 @@ public class NagCliCfg {
             } else {
                 nagDb.get(ni.getType()).put(ni.getName(), ni);
             }
+        }
+        for (NagItem chk : all){
+            chk.getChildren(true);
         }
     }
 
@@ -572,19 +576,13 @@ public class NagCliCfg {
                         }
                         NagItem dest = get(Types.hostgroup, pick);
                         if (dest == null) {
-                            dest = NagItem.construct(this, Types.hostgroup);
+                            dest = new NagItem(this, Types.hostgroup);
+                            all.add(dest);
                             dest.put(NagItem.ALIAS, pick);
                             dest.put(NagItem.HOSTGROUP_NAME, pick);
-                            dest.put("members", item.get(NagItem.HOST_NAME));
-                            all.add(dest);
+                            dest.put(NagItem.MEMBERS, item.get(NagItem.HOST_NAME));
                         } else {
-                            TreeSet<String> mems = dest.fieldToSet("members");
-                            if (mems == null) {
-                                dest.put("members", item.get(NagItem.HOST_NAME));
-                            } else {
-                                mems.add(item.get(NagItem.HOST_NAME));
-                                dest.put("members", NagItem.setToField(mems));
-                            }
+                            dest.append(NagItem.MEMBERS, item.getName());
                         }
                         item.remove(NagItem.HOST_NAME);
                         item.put(NagItem.HOSTGROUP_NAME, pick);
@@ -604,21 +602,21 @@ public class NagCliCfg {
                         if (pick.isEmpty()) {
                             return;
                         }
-                        ServiceGroup dest = (ServiceGroup) get(Types.servicegroup, pick);
+                        NagItem dest = (NagItem) get(Types.servicegroup, pick);
                         if (dest == null) {
-                            dest = (ServiceGroup) NagItem.construct(this, Types.servicegroup);
+                            dest = new NagItem(this, Types.servicegroup);
                             all.add(dest);
                             dest.put(NagItem.ALIAS, pick);
                             dest.put("servicegroup_name", pick);
                             lm.put(dest.getName(), dest);
                         }
-                        TreeSet<ServiceGroup.HostAndService> mems = dest.members();
                         NagItem hg = get(Types.hostgroup, hgn);
                         String desc = item.get(NagItem.SERVICE_DESCRIPTION);
-                        for (String h : hg.fieldToSet("members")) {
-                            mems.add(new ServiceGroup.HostAndService(h, desc));
+                        for (NagPointer h : hg.getChildren(false)) {
+                            if (h.key.byField.equals(NagItem.MEMBERS)) {
+                                dest.append(NagItem.MEMBERS, h.item.getName() + "," + desc);
+                            }
                         }
-                        dest.put("members", dest.membersToString(mems));
                     } else if (to.equalsIgnoreCase("s") && item.containsKey(NagItem.HOST_NAME)) {
                         em.println("Adding this service to a service group.");
                         em.println("- Create a new service group, just type a new name.");
@@ -634,18 +632,14 @@ public class NagCliCfg {
                         if (pick.isEmpty()) {
                             return;
                         }
-                        ServiceGroup dest = (ServiceGroup) get(Types.servicegroup, pick);
+                        NagItem dest = (NagItem) get(Types.servicegroup, pick);
                         if (dest == null) {
-                            dest = (ServiceGroup) NagItem.construct(this, Types.servicegroup);
-                            dest.put(NagItem.ALIAS, pick);
-                            dest.put("servicegroup_name", pick);
-                            dest.put("members", item.get(NagItem.HOST_NAME) + "," + item.get(NagItem.SERVICE_DESCRIPTION));
+                            dest = new NagItem(this, Types.servicegroup);
                             all.add(dest);
-                        } else {
-                            TreeSet<ServiceGroup.HostAndService> mems = dest.members();
-                            mems.add(new ServiceGroup.HostAndService(item.get(NagItem.HOST_NAME), item.get(NagItem.SERVICE_DESCRIPTION)));
-                            dest.put("members", dest.membersToString(mems));
+                            dest.put(NagItem.ALIAS, pick);
+                            dest.put(NagItem.SERVICEGROUP_NAME, pick);
                         }
+                        dest.append(NagItem.MEMBERS, item.get(NagItem.HOST_NAME) + "," + item.get(NagItem.SERVICE_DESCRIPTION));
                     } else {
                         em.err("Sorry, no move actions defined for this type of service definition.");
                     }
@@ -844,8 +838,8 @@ public class NagCliCfg {
                 }
             }
             if (recursive) {
-                for (NagPointer c : item.getChildren()) {
-                    grid.add(new String[]{c.key, "--> " + c.item.getName()});
+                for (NagPointer c : item.getChildren(true)) {
+                    grid.add(new String[]{c.key.byField, "--> " + c.item.getName()});
                 }
             }
         }
@@ -990,17 +984,22 @@ public class NagCliCfg {
      */
     private void rename(String from, Types type, String to) {
         for (NagItem e1 : all) {
-            for (NagPointer e2 : e1.getChildren()) {
-                if (e2.item.getName().equals(from) && e2.item.getType() == type) {
-                    em.print("Old name is refered to in field '" + e2.key + "' in object '" + e1.getType() + "/" + e1.getName() + "'");
-                    TreeSet<String> set = e1.fieldToSet(e2.key);
-                    set.remove(from);
-                    if (!to.isEmpty()) {
-                        set.add(to);
+            for (NagPointer c : e1.getChildren(false)){
+                if (c.key.to==type){
+                    for (String np:c.item.getNameFields()){
+                        String p = c.item.get(np);
+                        if (p.equals(from)){
+                            String oldRef=e1.get(c.key.byField);
+                            String oldName = c.item.getName();
+                            e1.remove(c.key.byField, oldName);
+                            // temporarily rename the item
+                            c.item.put(np, to);
+                            String newName = c.item.getName();
+                            String newRef = e1.append(c.key.byField, newName);
+                            c.item.put(np, from);
+                            System.out.println("Updated "+c.key.byField+" from "+oldRef+" to "+newRef);
+                        }
                     }
-                    String rep = NagItem.setToField(set);
-                    em.println(": Replacing '" + e1.get(e2.key) + "' with '" + rep + "'");
-                    e1.put(e2.key, rep);
                 }
             }
         }
@@ -1186,7 +1185,7 @@ public class NagCliCfg {
                     }
                 } else {
                     NagItem nItem = null;
-                    for (NagPointer e2 : item.getChildren()) {
+                    for (NagPointer e2 : item.getChildren(false)) {
                         if (pLen == 0) {
                             nItem = e2.item;
                             break;
@@ -1272,7 +1271,7 @@ public class NagCliCfg {
                     Types what;
                     try {
                         what = Types.valueOf(toker.nextToken());
-                        itm = NagItem.construct(this, what);
+                        itm = new NagItem(this, what);
                     } catch (Exception oops) {
                         continue;
                     }
@@ -1319,7 +1318,7 @@ public class NagCliCfg {
     }
 
     private void cloneObject() throws IOException {
-        NagItem ni = NagItem.construct(this, item.getType());
+        NagItem ni = new NagItem(this, item.getType());
         ni.putAll(item);
         while (true) {
             for (String s : ni.getNameFields()) {
@@ -1330,6 +1329,9 @@ public class NagCliCfg {
                 ni.put(s, name);
             }
             if (nagDb.get(item.getType()).containsKey(ni.getName())) {
+                if (em.json){
+                    em.failed("Duplicate name created by clone!");
+                }
                 em.err("Duplicate name!");
             } else {
                 break;
@@ -1392,7 +1394,7 @@ public class NagCliCfg {
                 if (obj.getKey().toLowerCase().contains(arg)) {
                     em.println("/" + top.getKey() + "/" + obj.getKey());
                 }
-                for (NagPointer ref : obj.getValue().getChildren()) {
+                for (NagPointer ref : obj.getValue().getChildren(true)) {
                     if (ref.item.getName().toLowerCase().contains(arg)) {
                         em.println("/" + top.getKey() + "/" + obj.getKey() + ": " + ref.key + " ->  " + ref.item.getName());
                     }
@@ -1409,7 +1411,7 @@ public class NagCliCfg {
                 em.println(top.getKey().toString());
                 for (Map.Entry<String, NagItem> obj : top.getValue().entrySet()) {
                     em.println(" +-- " + obj.getKey());
-                    for (NagPointer ref : obj.getValue().getChildren()) {
+                    for (NagPointer ref : obj.getValue().getChildren(true)) {
                         em.println(" | +-- " + ref.key + " ->  " + ref.item.getName());
                     }
                 }
@@ -1428,9 +1430,10 @@ public class NagCliCfg {
         }
         String name = delete.getName();
         for (NagItem itm : all) {
-            for (NagPointer ptr : itm.getChildren()) {
+            for (NagPointer ptr : itm.getChildren(true)) {
                 if (ptr.item.getType() == delete.getType() && ptr.item.getName().equals(name)) {
-                    itm.removeChild(ptr);
+                    em.println("Removed reference to "+name+" from "+itm.getName());
+                    itm.remove(ptr.key.byField, name);
                 }
             }
         }
@@ -1444,9 +1447,9 @@ public class NagCliCfg {
             JSONObject col = new JSONObject();
             for (Map.Entry<String, NagItem> obj : top.getValue().entrySet()) {
                 JSONArray itm = new JSONArray();
-                for (NagPointer ref : obj.getValue().getChildren()) {
+                for (NagPointer ref : obj.getValue().getChildren(false)) {
                     JSONObject ref2 = new JSONObject();
-                    ref2.put(ref.key, ref.item.getName());
+                    ref2.put(ref.key.byField, ref.item.getName());
                     itm.put(ref2);
                 }
                 col.put(obj.getKey(), itm);

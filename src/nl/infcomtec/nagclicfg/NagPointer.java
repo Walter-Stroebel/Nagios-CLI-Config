@@ -10,10 +10,10 @@ package nl.infcomtec.nagclicfg;
  */
 public class NagPointer {
 
-    public final String key;
+    public final NagPointerDef key;
     public final NagItem item;
 
-    public NagPointer(String key, NagItem item) {
+    public NagPointer(NagPointerDef key, NagItem item) {
         this.key = key;
         this.item = item;
     }
