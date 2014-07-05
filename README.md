@@ -24,8 +24,4 @@ What works:
 - Rename an item, automatically updating references.
 - Low learning curve, fairly obvious commands for system managers.
 - Optional JSON output for integration in higher-level applications.
-
-TODO:
-=====
-
 - Import foreign Nagios objects.
