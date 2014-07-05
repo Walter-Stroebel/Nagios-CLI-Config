@@ -1,0 +1,507 @@
+<h1 id="explain">Explain</h1>
+<p>Gives a short text, like this one, with more information on a command. Note that the file <strong>(nagios config directory)/nagclicfg.md</strong> must exist for this to work.</p>
+<p>It should also give some usage examples, like this:</p>
+<pre><code>/&gt; explain explain
+Gives a short text, like this one, with more information on a command.
+It should also give some usage examples, like this:</code></pre>
+<p><em>(stopping here, documentation can get to be so recursive...;)</em></p>
+<hr />
+<h1 id="import">Import</h1>
+<p>Takes a file or a directory as argument and adds any <strong>new</strong> objects it finds in there. Obviously the file or directory is expected to contain valid Nagios object definitions.</p>
+<pre><code>/&gt; import /var/cache/nagios3/objects.cache
+/command/check-host-alive: already defined.
+/command/check-mysql: added.</code></pre>
+<p><em>... and so on.</em></p>
+<hr />
+<h1 id="replace">Replace</h1>
+<p>Takes a file or a directory as argument and adds or <strong>replaces</strong> any objects it finds in there. Obviously the file or directory is expected to contain valid Nagios object definitions.</p>
+<pre><code>/&gt; replace /var/log/nagios/objects.cache         `
+/command/check-host-alive: replaced.
+/command/check-mysql: added.</code></pre>
+<p><em>... and so on.</em></p>
+<hr />
+<h1 id="tree">Tree</h1>
+<p>Prints a tree of your Nagios configuration, leaving out most of the details. Still, it gets to be a fairly long list!</p>
+<pre><code>/&gt; tree</code></pre>
+<p><em>(long list of command definitions and sensitive data omitted)...</em></p>
+<pre><code>servicegroup
+ +-- DNS
+ | +-- members -&gt;  dns,Check DNS
+ +-- all
+timeperiod
+ +-- 24x7
+ +-- never
+ +-- nonworkhours
+ +-- workhours
+hostextinfo
+ +-- centos_machines
+ | +-- hostgroup_name -&gt;  centos_machines
+ +-- debian-machines
+ | +-- hostgroup_name -&gt;  debian-machines
+ +-- phones
+ | +-- hostgroup_name -&gt;  phones
+/&gt;
+    </code></pre>
+<hr />
+<h1 id="add">Add</h1>
+<p>Takes two arguments: the field to add and its value.</p>
+<p>If the field already exists this will do nothing and generate a warning.</p>
+<pre><code>/host/linux-server&gt; clone
+Enter a new value for name: new.machine</code></pre>
+<p><em>(output omitted)</em></p>
+<pre><code>/host/new.machine&gt; add host_name new.machine.loc
+Adding &#39;host_name&#39; as &#39;new.machine.loc&#39;
+/host/new.machine.loc&gt; add host_name new.machine.loc
+Not adding &#39;host_name&#39; as &#39;new.machine.loc&#39;; item already exists. Use [set key value] instead.
+/host/new.machine.loc&gt;         `</code></pre>
+<p>See also <strong>ifadd</strong> and <strong>set</strong>.</p>
+<hr />
+<h1 id="set">Set</h1>
+<p>Takes two arguments: the field to set and its value.</p>
+<p>If the field does not already exists this will do nothing and generate a warning.</p>
+<pre><code>/&gt; cd host/localhost
+/host/localhost&gt; ls
+address    alias      host_name  use       
+/host/localhost&gt; set address 1.2.3.4
+Changing &#39;address&#39; from &#39;127.0.0.1&#39; to &#39;1.2.3.4&#39;
+/host/localhost&gt; rm address
+Removing &#39;address&#39;
+/host/localhost&gt; set address 127.0.0.1
+Not setting &#39;address&#39; to &#39;127.0.0.1&#39;; not an existing item. Use [add key value] instead.
+/host/localhost&gt; add address 127.0.0.1
+Adding &#39;address&#39; as &#39;127.0.0.1&#39;
+/host/localhost&gt; set host_name thismachine
+Updated members from a10,a20,localhost,virtmachine to a10,a20,thismachine,virtmachine
+Updated members from localhost,linksys,snom320 to linksys,snom320,thismachine
+Updated members from localhost to thismachine
+Updated parents from localhost to thismachine
+Changing &#39;host_name&#39; from &#39;localhost&#39; to &#39;thismachine&#39;
+/host/this-machine&gt; </code></pre>
+<p>See also <strong>ifset</strong> and <strong>add</strong>.</p>
+<hr />
+<h1 id="cd">cd</h1>
+<p>Takes an optional argument that should be a relative or absolute selector of an object or a category.</p>
+<p>If you omit the argument a list is printed you can select from.</p>
+<p>Finally, you can add an asterisk (*) to the argument to select the first matching object or category.</p>
+<pre><code>/&gt; cd /host/lin*
+/host/linux-server&gt; cd /
+/&gt; cd
+0: command
+1: contact
+2: contactgroup
+3: host
+4: hostgroup
+5: service
+6: servicegroup
+7: timeperiod
+8: hostextinfo
+Pick one: 4
+/hostgroup&gt;</code></pre>
+<p>See also <strong>ifcd</strong>.</p>
+<hr />
+<h1 id="check">Check</h1>
+<p>Runs the Nagios pre-flight check. <em>You should really read some of the Nagios documentation if this means nothing to you.</em></p>
+<p>Note that NagCliCfg has build-in checks as well, you should get some messages if your configuration is inconsistent. This will not catch all cases however, run <strong>check</strong> to be sure.</p>
+<pre><code>/&gt; check
+
+Nagios Core 3.5.1
+Copyright (c) 2009-2011 Nagios Core Development Team and Community Contributors
+Copyright (c) 1999-2009 Ethan Galstad
+Last Modified: 08-30-2013
+License: GPL
+
+Website: http://www.nagios.org
+Reading configuration data...
+   Read main config file okay...
+Processing object config directory &#39;/etc/nagios3/nagclicfg.d&#39;...
+Processing object config file &#39;/etc/nagios3/nagclicfg.d/hostextinfo.cfg&#39;...
+Processing object config file &#39;/etc/nagios3/nagclicfg.d/service.cfg&#39;...
+Processing object config file &#39;/etc/nagios3/nagclicfg.d/timeperiod.cfg&#39;...
+Processing object config file &#39;/etc/nagios3/nagclicfg.d/hostgroup.cfg&#39;...
+Processing object config file &#39;/etc/nagios3/nagclicfg.d/contact.cfg&#39;...
+Processing object config file &#39;/etc/nagios3/nagclicfg.d/host.cfg&#39;...
+Processing object config file &#39;/etc/nagios3/nagclicfg.d/contactgroup.cfg&#39;...
+Processing object config file &#39;/etc/nagios3/nagclicfg.d/servicegroup.cfg&#39;...
+Processing object config file &#39;/etc/nagios3/nagclicfg.d/command.cfg&#39;...
+   Read object config files okay...
+
+Running pre-flight check on configuration data...
+
+Checking services...
+        Checked 26 services.
+Checking hosts...
+        Checked 19 hosts.
+Checking host groups...
+        Checked 8 host groups.
+Checking service groups...
+        Checked 2 service groups.
+Checking contacts...
+        Checked 2 contacts.
+Checking contact groups...
+        Checked 1 contact groups.
+Checking service escalations...
+        Checked 0 service escalations.
+Checking service dependencies...
+        Checked 0 service dependencies.
+Checking host escalations...
+        Checked 0 host escalations.
+Checking host dependencies...
+        Checked 0 host dependencies.
+Checking commands...
+        Checked 154 commands.
+Checking time periods...
+        Checked 4 time periods.
+Checking for circular paths between hosts...
+Checking for circular host and service dependencies...
+Checking global event handlers...
+Checking obsessive compulsive processor commands...
+Checking misc settings...
+
+Total Warnings: 0
+Total Errors:   0
+
+Things look okay - No serious problems were detected during the pre-flight check
+/&gt; </code></pre>
+<hr />
+<h1 id="clone">clone</h1>
+<p>You should enter this when having selected an object or template first. You will be prompted for the fields naming the current object so you can name your new clone. Note that if you are cloning a template (a generic object), it will be named by a field &quot;name&quot;. Unless you are creating a new template, you should remove and add some fields to instantiate a concrete object.</p>
+<pre><code>/service/generic-service&gt; clone
+Enter a new value for name: anything as we name this by hand
+active_checks_enabled. . . . 1
+alias. . . . . . . . . . . . 24 Hours A Day, 7 Days A Week
+check_freshness. . . . . . . 0
+check_period . . . . . . . . 24x7
+contact_groups . . . . . . . admins
+contactgroup_name. . . . . . admins
+event_handler_enabled. . . . 1
+failure_prediction_enabled . 1
+flap_detection_enabled . . . 1
+friday . . . . . . . . . . . 00:00-24:00
+is_volatile. . . . . . . . . 0
+max_check_attempts . . . . . 4
+members. . . . . . . . . . . root
+monday . . . . . . . . . . . 00:00-24:00
+name . . . . . . . . . . . . anything as we name this by hand
+normal_check_interval. . . . 5
+notification_interval. . . . 0
+notification_options . . . . w,u,c,r
+notification_period. . . . . 24x7
+notifications_enabled. . . . 1
+obsess_over_service. . . . . 1
+parallelize_check. . . . . . 1
+passive_checks_enabled . . . 1
+process_perf_data. . . . . . 1
+register . . . . . . . . . . 0
+retain_nonstatus_information 1
+retain_status_information. . 1
+retry_check_interval . . . . 1
+saturday . . . . . . . . . . 00:00-24:00
+sunday . . . . . . . . . . . 00:00-24:00
+thursday . . . . . . . . . . 00:00-24:00
+timeperiod_name. . . . . . . 24x7
+tuesday. . . . . . . . . . . 00:00-24:00
+wednesday. . . . . . . . . . 00:00-24:00
+check_period . . . . . . . . --&gt; 24x7
+contact_groups . . . . . . . --&gt; admins
+notification_period. . . . . --&gt; 24x7
+/service/anything as we name this by hand&gt; add host_name localhost
+Adding &#39;host_name&#39; as &#39;localhost&#39;
+/service/anything as we name this by hand&gt; add service_description new_service
+Adding &#39;service_description&#39; as &#39;new_service&#39;
+/service/localhost,new_service&gt; rm name
+Removing &#39;name&#39;
+/service/localhost,new_service&gt; rm register
+Removing &#39;register&#39;
+/service/localhost,new_service&gt; add alias Our shiny new service
+Adding &#39;alias&#39; as &#39;Our shiny new service&#39;
+/service/localhost,new_service&gt; add check_command check_shininess
+Adding &#39;check_command&#39; as &#39;check_shininess&#39;
+/service/localhost,new_service&gt; </code></pre>
+<hr />
+<h1 id="diff">Diff</h1>
+<p>You should enter this when having selected an object or template first. If the object exists in both the configuration as you have currently loaded (and possibly altered) and the configuration of the running Nagios (taken from the objects.cache file), this will do a side-by-side diff of the two. Note that some differences are to be expected as Nagios fills out more details than NagCliCfg does.</p>
+<pre><code>/&gt; cd host/lo*
+/host/localhost&gt; diff
+define host {                                                                           define host {
+        active_checks_enabled   1                                                     &lt;
+        address 127.0.0.1                                                                       address 127.0.0.1
+        alias   localhost                                                                       alias   localhost
+        check_command   check-host-alive                                                        check_command   check-host-alive
+        check_freshness 0                                                             &lt;
+        check_interval  5.000000                                                      &lt;
+        contact_groups  admins                                                                  contact_groups  admins
+        event_handler_enabled   1                                                               event_handler_enabled   1
+        failure_prediction_enabled      1                                                       failure_prediction_enabled      1
+        first_notification_delay        0.000000                                      &lt;
+        flap_detection_enabled  1                                                               flap_detection_enabled  1
+        flap_detection_options  o,d,u                                                 &lt;
+        freshness_threshold     0                                                     &lt;
+        high_flap_threshold     0.000000                                              &lt;
+        host_name       localhost                                                               host_name       localhost
+        icon_image      base/debian.png                                               &lt;
+        icon_image_alt  Debian GNU/Linux                                              &lt;
+        initial_state   o                                                             &lt;
+        low_flap_threshold      0.000000                                              &lt;
+        max_check_attempts      10                                                              max_check_attempts      10
+        notes   Debian GNU/Linux servers                                              |         name    generic-host
+        notification_interval   0.000000                                              |         notification_interval   0
+        notification_options    d,u,r                                                           notification_options    d,u,r
+        notification_period     24x7                                                            notification_period     24x7
+        notifications_enabled   1                                                               notifications_enabled   1
+        obsess_over_host        1                                                     &lt;
+        passive_checks_enabled  1                                                     &lt;
+        process_perf_data       1                                                               process_perf_data       1
+        retain_nonstatus_information    1                                                       retain_nonstatus_information    1
+        retain_status_information       1                                                       retain_status_information       1
+        retry_interval  1.000000                                                      &lt;
+        stalking_options        n                                                     &lt;
+        statusmap_image base/debian.gd2                                               &lt;
+        vrml_image      debian.png                                                    &lt;
+}                                                                                       }
+/host/localhost&gt; </code></pre>
+<hr />
+<h1 id="dump">Dump</h1>
+<p>You should enter this when having selected an object or template first. If the object exists in the configuration of the running Nagios (taken from the objects.cache file), this will show the full definition.</p>
+<p>See also <strong>Export</strong>.</p>
+<pre><code>/&gt; cd
+0: command
+1: contact
+2: contactgroup
+3: host
+4: hostgroup
+5: service
+6: servicegroup
+7: timeperiod
+8: hostextinfo
+Pick one: 3
+/host&gt; cd localhost
+/host/localhost&gt; dump
+define host {
+        active_checks_enabled   1
+        address 127.0.0.1
+        alias   localhost
+        check_command   check-host-alive
+        check_freshness 0
+        check_interval  5.000000
+        contact_groups  admins
+        event_handler_enabled   1
+        failure_prediction_enabled      1
+        first_notification_delay        0.000000
+        flap_detection_enabled  1
+        flap_detection_options  o,d,u
+        freshness_threshold     0
+        high_flap_threshold     0.000000
+        host_name       localhost
+        icon_image      base/debian.png
+        icon_image_alt  Debian GNU/Linux
+        initial_state   o
+        low_flap_threshold      0.000000
+        max_check_attempts      10
+        notes   Debian GNU/Linux servers
+        notification_interval   0.000000
+        notification_options    d,u,r
+        notification_period     24x7
+        notifications_enabled   1
+        obsess_over_host        1
+        passive_checks_enabled  1
+        process_perf_data       1
+        retain_nonstatus_information    1
+        retain_status_information       1
+        retry_interval  1.000000
+        stalking_options        n
+        statusmap_image base/debian.gd2
+        vrml_image      debian.png
+}
+/host/localhost&gt; </code></pre>
+<hr />
+<h1 id="export">Export</h1>
+<p>You should enter this when having selected an object or template first. If the object exists in the currently loaded configuration, this will show the definition.</p>
+<p>See also <strong>Dump</strong>.</p>
+<pre><code>/&gt; cd host/localhost
+/host/localhost&gt; export
+define host {
+        address 127.0.0.1
+        alias   localhost
+        host_name       localhost
+        use     generic-host
+}
+/host/localhost&gt;</code></pre>
+<hr />
+<h1 id="echo">Echo</h1>
+<p>Just prints its arguments. Mostly makes sense in scripts.</p>
+<pre><code>/&gt; ifcd /host/localhost
+/host/localhost&gt; echo it is there!
+it is there!
+/host/localhost&gt; else
+/host/localhost&gt; echo No localhost found.
+/host/localhost&gt; fi
+/host/localhost&gt; </code></pre>
+<hr />
+<h1 id="else">Else</h1>
+<p>Part of the ifxxx [else] fi constructs.</p>
+<pre><code>/&gt; ifcd /host/localhost
+/host/localhost&gt; echo it is there!
+it is there!
+/host/localhost&gt; else
+/host/localhost&gt; echo No localhost found.
+/host/localhost&gt; fi
+/host/localhost&gt; </code></pre>
+<hr />
+<h1 id="fi">fi</h1>
+<p>Part of the ifxxx [else] fi constructs.</p>
+<pre><code>/&gt; ifcd /host/localhost
+/host/localhost&gt; echo it is there!
+it is there!
+/host/localhost&gt; else
+/host/localhost&gt; echo No localhost found.
+/host/localhost&gt; fi
+/host/localhost&gt; </code></pre>
+<hr />
+<h1 id="find">Find</h1>
+<p>Does a search of the argument, listing partial matches as well.</p>
+<pre><code>/&gt; find local
+/host/localhost
+/host/virtmachine: parents -&gt;  localhost
+/hostgroup/debian-machines: members -&gt;  localhost
+/hostgroup/http-servers: members -&gt;  localhost
+/hostgroup/nagios-servers: members -&gt;  localhost
+/hostgroup/ssh-servers: members -&gt;  localhost
+/&gt; </code></pre>
+<hr />
+<h1 id="help">Help</h1>
+<p>Prints the in-program help.</p>
+<p>This does not need any external file, contrary to <strong>explain</strong> which needs the nagclicfg.md file available in the Nagios configuration directory.</p>
+<hr />
+<h1 id="ifadd">ifadd</h1>
+<p>The conditional version of <strong>add</strong>, can be followed by <strong>else</strong> and must be terminated by <strong>fi</strong>.</p>
+<hr />
+<h1 id="ifset">ifset</h1>
+<p>The conditional version of <strong>set</strong>, can be followed by <strong>else</strong> and must be terminated by <strong>fi</strong>.</p>
+<hr />
+<h1 id="ifcd">ifcd</h1>
+<p>The conditional version of <strong>cd</strong>, can be followed by <strong>else</strong> and must be terminated by <strong>fi</strong>.</p>
+<hr />
+<h1 id="ifrm">ifrm</h1>
+<p>The conditional version of <strong>rm</strong>, can be followed by <strong>else</strong> and must be terminated by <strong>fi</strong>.</p>
+<hr />
+<h1 id="ifrmdir">ifrmdir</h1>
+<p>The conditional version of <strong>rmdir</strong>, can be followed by <strong>else</strong> and must be terminated by <strong>fi</strong>.</p>
+<hr />
+<h1 id="ls">ls</h1>
+<p>Lists the current object or group</p>
+<p>This command can take these options:</p>
+<ul>
+<li>-l (long) show more data (1 item per line)</li>
+<li>-r (refs, implies -l) also show data from referrals</li>
+<li>-s (sort) sort the output</li>
+<li>-d (dns, implies -l) attempt to resolve the 'address' field. This might take a rather long time if the address cannot be resolved.</li>
+</ul>
+<p>The following shows all the options:</p>
+<pre><code>/host/localhost&gt; ls
+address    alias      host_name  use       
+/host/localhost&gt; ls -l
+address . 127.0.0.1
+alias . . localhost
+host_name localhost
+use . . . generic-host
+/host/localhost&gt; ls -r 
+address. . . . . . . . . . . 127.0.0.1
+alias. . . . . . . . . . . . localhost
+check_command. . . . . . . . check-host-alive
+contact_groups . . . . . . . admins
+event_handler_enabled. . . . 1
+failure_prediction_enabled . 1
+flap_detection_enabled . . . 1
+host_name. . . . . . . . . . localhost
+max_check_attempts . . . . . 10
+name . . . . . . . . . . . . generic-host
+notification_interval. . . . 0
+notification_options . . . . d,u,r
+notification_period. . . . . 24x7
+notifications_enabled. . . . 1
+process_perf_data. . . . . . 1
+retain_nonstatus_information 1
+retain_status_information. . 1
+use. . . . . . . . . . . . . --&gt; generic-host
+/host/localhost&gt; ls -rd
+address. . . . . . . . . . . 127.0.0.1 Addr=127.0.0.1 (localhost)
+alias. . . . . . . . . . . . localhost
+check_command. . . . . . . . check-host-alive
+contact_groups . . . . . . . admins
+event_handler_enabled. . . . 1
+failure_prediction_enabled . 1
+flap_detection_enabled . . . 1
+host_name. . . . . . . . . . localhost
+max_check_attempts . . . . . 10
+name . . . . . . . . . . . . generic-host
+notification_interval. . . . 0
+notification_options . . . . d,u,r
+notification_period. . . . . 24x7
+notifications_enabled. . . . 1
+process_perf_data. . . . . . 1
+retain_nonstatus_information 1
+retain_status_information. . 1
+use. . . . . . . . . . . . . --&gt; generic-host
+/host/localhost&gt; </code></pre>
+<hr />
+<h1 id="mv">mv</h1>
+<p>At the time of this writing this only works for services. More on this command later.</p>
+<hr />
+<h1 id="pwd">pwd</h1>
+<p>As you can <strong>cd</strong> quite deep down object referals, this command shows you the current absolute path.</p>
+<pre><code>/host/localhost&gt; cd gen*
+/host/localhost/generic-host&gt; cd ch*    
+/host/localhost/generic-host/check-host-alive&gt; pwd
+/command/check-host-alive
+/host/localhost/generic-host/check-host-alive&gt; </code></pre>
+<hr />
+<h1 id="quit">Quit</h1>
+<p>Like pressing ^D, exits the program. Unsaved changes (see also <strong>write</strong>) will be silently discarded.</p>
+<hr />
+<h1 id="exit">Exit</h1>
+<p>Like pressing ^D, exits the program. Unsaved changes (see also <strong>write</strong>) will be silently discarded.</p>
+<hr />
+<h1 id="reload">Reload</h1>
+<p>Simple executes the configured reload command. Assumes you have sufficient privileges and that you wrote something to reload. See also <strong>write</strong> and <strong>check</strong>.</p>
+<hr />
+<h1 id="rm">rm</h1>
+<p>Removes a field from the current object.</p>
+<pre><code>/&gt; cd host/localhost
+/host/localhost&gt; rm host_name
+Sorry, cannot remove/clear a field naming an object.
+/host/localhost&gt; rm use
+Removing &#39;use&#39;
+/host/localhost&gt; ls
+address    alias      host_name 
+/host/localhost&gt; ls -l
+address . 127.0.0.1
+alias . . localhost
+host_name localhost
+/host/localhost&gt; </code></pre>
+<hr />
+<h1 id="rmdir">rmdir</h1>
+<p>Removes the entire current object! This also recursively removes the object from anything that has a referral to it, possibly breaking those definitions.</p>
+<pre><code>/host/localhost&gt; rmdir
+Removed reference via &#39;members&#39; from &#39;/hostgroup/debian-machines&#39;
+Removed reference via &#39;members&#39; from &#39;/hostgroup/http-servers&#39;
+Removed reference via &#39;members&#39; from &#39;/hostgroup/nagios-servers&#39;
+Removed reference via &#39;members&#39; from &#39;/hostgroup/ssh-servers&#39;
+Removed reference via &#39;parents&#39; from &#39;/host/virtmachine&#39;
+/host&gt; </code></pre>
+<hr />
+<h1 id="write">Write</h1>
+<p>Writes the current in-memory configuration out to files in the Nagios configuration directory, in a directory that should be private to this tool (nagclicfg.d). Note that this unlinks any configuration that was in place before, like from a package install, your current setup or another tool.</p>
+<b>You will be warned before this happens!</b>
+<p>However, this change should be fairly safe and restoring your old configuration should be simple. The old nagios.cfg file is also backed up so it should be a simple matter of replacing nagios.cfg as updated by this tool with that backup file.</p>
+<b>There are however no guarantees! Make a backup or live on the edge, your choice :)</b>
+<hr />
+<h1 id="firstboot">Firstboot</h1>
+<p>For use in deployment tasks, does the above write without asking confirmation.</p>
+<hr />
+<h1 id="define">Define</h1>
+<p>A simple command that prompts for all the required fields for an object, as specified by the Nagios manual. Not recommended for complex objects but very handy for creating a hostgroup, for instance.</p>
+<pre><code>/hostgroup&gt; define
+Enter hostgroup_name: new-group
+Enter alias: My new group
+/hostgroup/new-group&gt;</code></pre>
+<hr />

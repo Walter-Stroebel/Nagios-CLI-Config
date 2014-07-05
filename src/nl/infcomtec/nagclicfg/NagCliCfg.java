@@ -315,7 +315,7 @@ public class NagCliCfg {
                 nagDb.get(ni.getType()).put(ni.getName(), ni);
             }
         }
-        for (NagItem chk : all){
+        for (NagItem chk : all) {
             chk.getChildren(true);
         }
     }
@@ -326,11 +326,13 @@ public class NagCliCfg {
         }
         consolidate();
         if (cmd.equals("help")) {
-            printHelp();
+            Help.printHelp(em);
         } else if (cmd.equals("quit") || cmd.equals("exit")) {
             em.exit(0, this);
         } else if (cmd.equals("tree")) {
             tree();
+        } else if (cmd.startsWith("explain")) {
+            Help.explain(this, cmd.substring(7));
         } else if (cmd.startsWith("echo ")) {
             em.println(cmd.substring(5));
         } else if (cmd.equals("pwd")) {
@@ -491,46 +493,6 @@ public class NagCliCfg {
                 f1.delete();
                 f2.delete();
             }
-        }
-    }
-
-    private void printHelp() {
-        TreeSet<String> help = new TreeSet(Arrays.asList(new String[]{
-            "tree: print a tree view of the entire configuration.",
-            "add: add a value to the current object (see also 'set').",
-            "cd <path>: move around in the configuration, use [ls] for suggestions.",
-            "check: run 'nagios -v config_file' (do this after write!)",
-            "clone: Clones the current object.",
-            "diff: compare object to Nagios cached object (expect some differences).",
-            "dump: Raw dump of the current object.",
-            "echo: Just print the argument(s) to the output.",
-            "else: inverted part of an if statement",
-            "export: Export the current object (using generics).",
-            "fi: closes an 'if' conditional block",
-            "find: find any named object or group.",
-            "help: you are reading it.",
-            "ifadd <field> <value>: if the field was added continue processing commands, skip to else/fi otherwise.",
-            "ifcd <path>: cd if exists and continue processing commands, skip to else/fi otherwise.",
-            "ifset <field> <value>: if the field was changed continue processing commands, skip to else/fi otherwise.",
-            "ifrm <field>: if the field was deleted continue processing commands, skip to else/fi otherwise.",
-            "ls: list the current object or group.\n"//
-            + "    -l (long) show more data (1 item per line)\n"//
-            + "    -r (refs, implies -l) also show data from referrals\n"//
-            + "    -s (sort) sort the output\n"//
-            + "    -d (dns, implies -l) attempt to resolve the 'address' field (may be slow)",
-            "mv: context sensitive, pick from the options offered.",
-            "pwd: shows where you really are.",
-            "quit, exit or ^D: exit the program.",
-            "reload: Make Nagios reload the config (write and check first!)",
-            "rm <field>: Delete a field in the current object.",
-            "rmdir: Delete the current object.",
-            "ifrmdir: if the object was deleted continue processing commands, skip to else/fi otherwise.",
-            "set: set a value in the current object to a new value (see also 'add').",
-            "write: write the entire config.",
-            "define: context sensitive, will ask the required items for the object being defined.",
-            "firstboot: write the entire config; no questios asked!"}));
-        for (String h : help) {
-            em.println(h);
         }
     }
 
@@ -984,12 +946,12 @@ public class NagCliCfg {
      */
     private void rename(String from, Types type, String to) {
         for (NagItem e1 : all) {
-            for (NagPointer c : e1.getChildren(false)){
-                if (c.key.to==type){
-                    for (String np:c.item.getNameFields()){
+            for (NagPointer c : e1.getChildren(false)) {
+                if (c.key.to == type) {
+                    for (String np : c.item.getNameFields()) {
                         String p = c.item.get(np);
-                        if (p.equals(from)){
-                            String oldRef=e1.get(c.key.byField);
+                        if (p.equals(from)) {
+                            String oldRef = e1.get(c.key.byField);
                             String oldName = c.item.getName();
                             e1.remove(c.key.byField, oldName);
                             // temporarily rename the item
@@ -997,7 +959,7 @@ public class NagCliCfg {
                             String newName = c.item.getName();
                             String newRef = e1.append(c.key.byField, newName);
                             c.item.put(np, from);
-                            System.out.println("Updated "+c.key.byField+" from "+oldRef+" to "+newRef);
+                            System.out.println("Updated " + c.key.byField + " from " + oldRef + " to " + newRef);
                         }
                     }
                 }
@@ -1329,7 +1291,7 @@ public class NagCliCfg {
                 ni.put(s, name);
             }
             if (nagDb.get(item.getType()).containsKey(ni.getName())) {
-                if (em.json){
+                if (em.json) {
                     em.failed("Duplicate name created by clone!");
                 }
                 em.err("Duplicate name!");
@@ -1396,7 +1358,7 @@ public class NagCliCfg {
                 }
                 for (NagPointer ref : obj.getValue().getChildren(true)) {
                     if (ref.item.getName().toLowerCase().contains(arg)) {
-                        em.println("/" + top.getKey() + "/" + obj.getKey() + ": " + ref.key + " ->  " + ref.item.getName());
+                        em.println("/" + top.getKey() + "/" + obj.getKey() + ": " + ref.key.byField + " ->  " + ref.item.getName());
                     }
                 }
             }
@@ -1412,7 +1374,7 @@ public class NagCliCfg {
                 for (Map.Entry<String, NagItem> obj : top.getValue().entrySet()) {
                     em.println(" +-- " + obj.getKey());
                     for (NagPointer ref : obj.getValue().getChildren(true)) {
-                        em.println(" | +-- " + ref.key + " ->  " + ref.item.getName());
+                        em.println(" | +-- " + ref.key.byField + " ->  " + ref.item.getName());
                     }
                 }
             }
@@ -1432,7 +1394,7 @@ public class NagCliCfg {
         for (NagItem itm : all) {
             for (NagPointer ptr : itm.getChildren(true)) {
                 if (ptr.item.getType() == delete.getType() && ptr.item.getName().equals(name)) {
-                    em.println("Removed reference to "+name+" from "+itm.getName());
+                    em.println("Removed reference via '" + ptr.key.byField + "' from '/"+itm.getType().toString()+"/" + itm.getName()+"'");
                     itm.remove(ptr.key.byField, name);
                 }
             }

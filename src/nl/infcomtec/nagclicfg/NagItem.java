@@ -358,7 +358,7 @@ public class NagItem extends TreeMap<String, String> {
                         if (child != null) {
                             children.add(new NagPointer(e, child));
                         } else if (check) {
-                            owner.em.err("/"+type+"/"+getName() + " refers to /" + e.to + "/" + val + " which does not exist.");
+                            owner.em.err("/" + type + "/" + getName() + " refers to /" + e.to + "/" + val + " which does not exist.");
                         }
                     } else {
                         TreeSet<String> mems;
@@ -414,8 +414,8 @@ public class NagItem extends TreeMap<String, String> {
                         put(fieldName, setToField(mems));
                     }
                 }
+                return get(fieldName);
             }
-            return get(fieldName);
         }
         // not a referencing field, just remove it.
         remove(fieldName);
