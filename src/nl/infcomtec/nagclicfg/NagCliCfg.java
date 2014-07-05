@@ -331,6 +331,40 @@ public class NagCliCfg {
             em.exit(0, this);
         } else if (cmd.equals("tree")) {
             tree();
+        } else if (cmd.startsWith("import")) {
+            File f = new File(cmd.substring(6).trim());
+            if (f.exists()) {
+                NagCliCfg tmp = new NagCliCfg();
+                tmp.read(f);
+                for (NagItem itm : tmp.all) {
+                    if (get(itm.type, itm.getName()) != null) {
+                        em.println("/" + itm.type.toString() + "/" + itm.getName() + ": already defined");
+                    } else {
+                        all.add(itm);
+                        em.println("/" + itm.type.toString() + "/" + itm.getName() + ": added");
+                    }
+                }
+            } else {
+                em.err(f.getAbsolutePath() + ": file not found!");
+            }
+        } else if (cmd.startsWith("replace")) {
+            File f = new File(cmd.substring(7).trim());
+            if (f.exists()) {
+                NagCliCfg tmp = new NagCliCfg();
+                tmp.read(f);
+                for (NagItem itm : tmp.all) {
+                    NagItem del = get(itm.type, itm.getName());
+                    if (del != null) {
+                        all.remove(del);
+                        em.println("/" + itm.type.toString() + "/" + itm.getName() + ": replaced");
+                    } else {
+                        em.println("/" + itm.type.toString() + "/" + itm.getName() + ": added");
+                    }
+                    all.add(itm);
+                }
+            } else {
+                em.err(f.getAbsolutePath() + ": file not found!");
+            }
         } else if (cmd.startsWith("explain")) {
             Help.explain(this, cmd.substring(7));
         } else if (cmd.startsWith("echo ")) {
@@ -1394,7 +1428,7 @@ public class NagCliCfg {
         for (NagItem itm : all) {
             for (NagPointer ptr : itm.getChildren(true)) {
                 if (ptr.item.getType() == delete.getType() && ptr.item.getName().equals(name)) {
-                    em.println("Removed reference via '" + ptr.key.byField + "' from '/"+itm.getType().toString()+"/" + itm.getName()+"'");
+                    em.println("Removed reference via '" + ptr.key.byField + "' from '/" + itm.getType().toString() + "/" + itm.getName() + "'");
                     itm.remove(ptr.key.byField, name);
                 }
             }
