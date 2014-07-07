@@ -81,6 +81,8 @@ Add
 
 Takes two arguments: the field to add and its value.
 
+If the field is multi-value, this works identically to **set**.
+
 If the field already exists this will do nothing and generate a warning.
 
     /host/linux-server> clone
@@ -103,8 +105,12 @@ Set
 
 Takes two arguments: the field to set and its value.
 
-If the field does not already exists this will do nothing and generate a
-warning.
+If the field does not already exists this will do nothing and will generate a
+warning, unless the field is a multi-value field like **hostgroups**.
+Multi-value fields are simply added to, if the value was not already in the
+set.
+
+Note that **add** and **set** behave identically for multi-value fields.
 
     /> cd host/localhost
     /host/localhost> ls
@@ -510,6 +516,14 @@ ifadd
 The conditional version of **add**, can be followed by **else** and must
 be terminated by **fi**.
 
+If the field is a multi-value field like **hostgroups** the value will be
+added if the value was not already in the set, returning **true**.
+
+If a multi-value field already contained the value, **ifadd** will return
+false.
+
+Note that **ifadd** and **ifset** behave identically for multi-value fields.
+
 * * * * *
 
 ifset
@@ -517,6 +531,14 @@ ifset
 
 The conditional version of **set**, can be followed by **else** and must
 be terminated by **fi**.
+
+If the field is a multi-value field like **hostgroups** the value will be
+added if the value was not already in the set, returning **true**.
+
+If a multi-value field already contained the value, **ifset** will return
+false.
+
+Note that **ifadd** and **ifset** behave identically for multi-value fields.
 
 * * * * *
 
@@ -733,4 +755,25 @@ but very handy for creating a hostgroup, for instance.
     Enter alias: My new group
     /hostgroup/new-group>
 
+* * * * *
+
+rmrf/
+=====
+
+This incredibly dangerous-seeming command deletes all host, service,
+hostgroup and servicegroup objects. If you are using hostextinfo this
+will probably print warnings about those objects having missing references.
+
+Obviously you should type **quit** immediately after this command unless
+you are doing a full idempotent reinstall of your Nagios environment, for
+which purpose this command is intended.
+
+In normal use it would be in some kind of script and be followed by an
+**import** or **replace** command. Alternatively the script can have a
+list of **clone** or **define** commands to recreate the desired configuration.
+
+The advantage of this approach is that you remove any old entries. It is
+also useful after an initial install by a package manager of the Nagios
+system to get rid of all the stock objects.
+ 
 * * * * *

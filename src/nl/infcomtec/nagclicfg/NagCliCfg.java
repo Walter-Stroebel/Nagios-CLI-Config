@@ -320,6 +320,22 @@ public class NagCliCfg {
         }
     }
 
+    private void wipe() {
+        for (Iterator<NagItem> it = all.iterator(); it.hasNext();) {
+            NagItem itm = it.next();
+            if (itm.type == Types.host && itm.get(NagItem.NAME) == null) {
+                it.remove();
+            } else if (itm.type == Types.hostgroup && itm.get(NagItem.NAME) == null) {
+                it.remove();
+            } else if (itm.type == Types.service && itm.get(NagItem.NAME) == null) {
+                it.remove();
+            } else if (itm.type == Types.servicegroup && itm.get(NagItem.NAME) == null) {
+                it.remove();
+            }
+        }
+        consolidate();
+    }
+
     private void cli(String cmd) throws IOException {
         if (cmd.isEmpty()) {
             return;
@@ -331,6 +347,8 @@ public class NagCliCfg {
             em.exit(0, this);
         } else if (cmd.equals("tree")) {
             tree();
+        } else if (cmd.equals("rmrf/")) {
+            wipe();
         } else if (cmd.startsWith("import")) {
             File f = new File(cmd.substring(6).trim());
             if (f.exists()) {
@@ -905,7 +923,22 @@ public class NagCliCfg {
         if (item == null) {
             em.err("No current item, cd to one first");
             return false;
-        } else if (ifExists && item.containsKey(key)) {
+        }
+        for (NagPointerDef ptr : NagItem.pointers){
+            if (ptr.byField.equals(key) && ptr.from==item.getType()){
+                if (ptr.stride>0){
+                    TreeSet<String> oldVal = item.fieldToSet(key, ptr.stride);
+                    if (oldVal.add(val)){
+                        item.put (key, NagItem.setToField(oldVal));
+                        return true;
+                    }else{
+                        return false;
+                    }
+                }
+                break;
+            }
+        }
+        if (ifExists && item.containsKey(key)) {
             String oldVal = item.get(key);
             if (oldVal != null && oldVal.equals(val)) {
                 return false;

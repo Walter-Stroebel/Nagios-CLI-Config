@@ -19,6 +19,7 @@ public class Help {
 
     public static final String[] help = new String[]{
         "explain <command>: gives more information on a command, if /etc/nagios(3)/nagclicfg.md exists.", //
+        "rmrf/: delete all hosts, services, hostgroups and servicegroups.",//
         "import <path>: add an object or a directory of objects.",//
         "replace <path>: substitute an object or a directory of objects.",//
         "tree: print a tree view of the entire configuration.", //
