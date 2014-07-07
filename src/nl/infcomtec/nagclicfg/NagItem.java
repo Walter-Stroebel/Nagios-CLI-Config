@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.UUID;
 import org.json.JSONObject;
 
 /**
@@ -207,7 +208,7 @@ public class NagItem extends TreeMap<String, String> {
                 ret = ret + "," + get(s);
             }
         }
-        return ret == null ? "Object has no name!" : ret;
+        return ret;
     }
 
     /**
@@ -273,9 +274,13 @@ public class NagItem extends TreeMap<String, String> {
         }
         if (is(REGISTER, "0") && containsKey(NAME)) {
             return new String[]{NAME};
+        } else {
+            String uuid = UUID.randomUUID().toString();
+            owner.em.err("Cannot find name for " + this + "; forcing name to: " + uuid);
+            put(REGISTER, "0");
+            put(NAME, uuid);
+            return new String[]{NAME};
         }
-        owner.em.err("Cannot find name for " + this);
-        return null;
     }
 
     public final void dump(Emitter em, boolean withReferals) {
