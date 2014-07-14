@@ -912,31 +912,40 @@ public class NagCliCfg {
 
     private boolean set(String nvp, boolean ifExists, boolean remove) {
         String key, val;
-        if (!remove) {
-            String[] two = splitNVP(nvp);
-            key = two[0];
-            val = two[1];
-        } else {
-            key = nvp;
-            val = "";
-        }
+        String[] two = splitNVP(nvp);
+        key = two[0];
+        val = two[1];
         if (item == null) {
             em.err("No current item, cd to one first");
             return false;
         }
-        for (NagPointerDef ptr : NagItem.pointers){
-            if (ptr.byField.equals(key) && ptr.from==item.getType()){
-                if (ptr.stride>0){
+        for (NagPointerDef ptr : NagItem.pointers) {
+            if (ptr.byField.equals(key) && ptr.from == item.getType()) {
+                if (ptr.stride > 0) {
                     TreeSet<String> oldVal = item.fieldToSet(key, ptr.stride);
-                    if (oldVal.add(val)){
-                        item.put (key, NagItem.setToField(oldVal));
-                        return true;
-                    }else{
+                    if (remove) {
+                        if (oldVal.remove(val)) {
+                            if (oldVal.isEmpty()) {
+                                item.remove(key);
+                            } else {
+                                item.put(key, NagItem.setToField(oldVal));
+                            }
+                            return true;
+                        }
+                        return false;
+                    } else if (oldVal.add(val)) {
+                        item.put(key, NagItem.setToField(oldVal));
+                        return false;
+                    } else {
                         return false;
                     }
                 }
                 break;
             }
+        }
+        if (remove && !val.isEmpty()) {
+            em.err("That is not a multi-value field, try rm " + key);
+            return false;
         }
         if (ifExists && item.containsKey(key)) {
             String oldVal = item.get(key);
