@@ -38,7 +38,7 @@ public class Help {
         "ifadd <field> <value>: if the field was added continue processing commands, skip to else/fi otherwise.",//
         "ifcd <path>: cd if exists and continue processing commands, skip to else/fi otherwise.",//
         "ifset <field> <value>: if the field was changed continue processing commands, skip to else/fi otherwise.",//
-        "ifrm <field>: if the field was deleted continue processing commands, skip to else/fi otherwise.",//
+        "ifrm <field> [value]: if the field was modified continue processing commands, skip to else/fi otherwise.",//
         "ls: list the current object or group.\n"//
         + "    -l (long) show more data (1 item per line)\n"//
         + "    -r (refs, implies -l) also show data from referrals\n"//
@@ -48,7 +48,7 @@ public class Help {
         "pwd: shows where you really are.",//
         "quit, exit or ^D: exit the program.", //
         "reload: Make Nagios reload the config (write and check first!)",//
-        "rm <field>: Delete a field in the current object.", //
+        "rm <field> [value]: Delete a field in the current object or remove value from a multi-value field.", //
         "rmdir: Delete the current object.",//
         "ifrmdir: if the object was deleted continue processing commands, skip to else/fi otherwise.",//
         "set: set a value in the current object to a new value (see also 'add').",//

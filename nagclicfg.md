@@ -680,7 +680,9 @@ sufficient privileges and that you wrote something to reload. See also
 rm
 ==
 
-Removes a field from the current object.
+Removes a field from the current object or a value from a multi-value field.
+In the second case you must supply the value to remove, as in
+**rm parents localhost** to remove **localhost** from the list of **parents**.
 
     /> cd host/localhost
     /host/localhost> rm host_name

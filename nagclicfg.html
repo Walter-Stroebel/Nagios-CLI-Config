@@ -45,6 +45,7 @@ hostextinfo
 <hr />
 <h1 id="add">Add</h1>
 <p>Takes two arguments: the field to add and its value.</p>
+<p>If the field is multi-value, this works identically to <strong>set</strong>.</p>
 <p>If the field already exists this will do nothing and generate a warning.</p>
 <pre><code>/host/linux-server&gt; clone
 Enter a new value for name: new.machine</code></pre>
@@ -58,7 +59,8 @@ Not adding &#39;host_name&#39; as &#39;new.machine.loc&#39;; item already exists
 <hr />
 <h1 id="set">Set</h1>
 <p>Takes two arguments: the field to set and its value.</p>
-<p>If the field does not already exists this will do nothing and generate a warning.</p>
+<p>If the field does not already exists this will do nothing and will generate a warning, unless the field is a multi-value field like <strong>hostgroups</strong>. Multi-value fields are simply added to, if the value was not already in the set.</p>
+<p>Note that <strong>add</strong> and <strong>set</strong> behave identically for multi-value fields.</p>
 <pre><code>/&gt; cd host/localhost
 /host/localhost&gt; ls
 address    alias      host_name  use       
@@ -374,9 +376,15 @@ it is there!
 <hr />
 <h1 id="ifadd">ifadd</h1>
 <p>The conditional version of <strong>add</strong>, can be followed by <strong>else</strong> and must be terminated by <strong>fi</strong>.</p>
+<p>If the field is a multi-value field like <strong>hostgroups</strong> the value will be added if the value was not already in the set, returning <strong>true</strong>.</p>
+<p>If a multi-value field already contained the value, <strong>ifadd</strong> will return false.</p>
+<p>Note that <strong>ifadd</strong> and <strong>ifset</strong> behave identically for multi-value fields.</p>
 <hr />
 <h1 id="ifset">ifset</h1>
 <p>The conditional version of <strong>set</strong>, can be followed by <strong>else</strong> and must be terminated by <strong>fi</strong>.</p>
+<p>If the field is a multi-value field like <strong>hostgroups</strong> the value will be added if the value was not already in the set, returning <strong>true</strong>.</p>
+<p>If a multi-value field already contained the value, <strong>ifset</strong> will return false.</p>
+<p>Note that <strong>ifadd</strong> and <strong>ifset</strong> behave identically for multi-value fields.</p>
 <hr />
 <h1 id="ifcd">ifcd</h1>
 <p>The conditional version of <strong>cd</strong>, can be followed by <strong>else</strong> and must be terminated by <strong>fi</strong>.</p>
@@ -465,7 +473,7 @@ use. . . . . . . . . . . . . --&gt; generic-host
 <p>Simple executes the configured reload command. Assumes you have sufficient privileges and that you wrote something to reload. See also <strong>write</strong> and <strong>check</strong>.</p>
 <hr />
 <h1 id="rm">rm</h1>
-<p>Removes a field from the current object.</p>
+<p>Removes a field from the current object or a value from a multi-value field. In the second case you must supply the value to remove, as in <strong>rm parents localhost</strong> to remove <strong>localhost</strong> from the list of <strong>parents</strong>.</p>
 <pre><code>/&gt; cd host/localhost
 /host/localhost&gt; rm host_name
 Sorry, cannot remove/clear a field naming an object.
@@ -491,9 +499,9 @@ Removed reference via &#39;parents&#39; from &#39;/host/virtmachine&#39;
 <hr />
 <h1 id="write">Write</h1>
 <p>Writes the current in-memory configuration out to files in the Nagios configuration directory, in a directory that should be private to this tool (nagclicfg.d). Note that this unlinks any configuration that was in place before, like from a package install, your current setup or another tool.</p>
-<b>You will be warned before this happens!</b>
+<p><strong>You will be warned before this happens!</strong></p>
 <p>However, this change should be fairly safe and restoring your old configuration should be simple. The old nagios.cfg file is also backed up so it should be a simple matter of replacing nagios.cfg as updated by this tool with that backup file.</p>
-<b>There are however no guarantees! Make a backup or live on the edge, your choice :)</b>
+<p><strong>There are however no guarantees! Make a backup or live on the edge, your choice :)</strong></p>
 <hr />
 <h1 id="firstboot">Firstboot</h1>
 <p>For use in deployment tasks, does the above write without asking confirmation.</p>
@@ -504,4 +512,10 @@ Removed reference via &#39;parents&#39; from &#39;/host/virtmachine&#39;
 Enter hostgroup_name: new-group
 Enter alias: My new group
 /hostgroup/new-group&gt;</code></pre>
+<hr />
+<h1 id="rmrf">rmrf/</h1>
+<p>This incredibly dangerous-seeming command deletes all host, service, hostgroup and servicegroup objects. If you are using hostextinfo this will probably print warnings about those objects having missing references.</p>
+<p>Obviously you should type <strong>quit</strong> immediately after this command unless you are doing a full idempotent reinstall of your Nagios environment, for which purpose this command is intended.</p>
+<p>In normal use it would be in some kind of script and be followed by an <strong>import</strong> or <strong>replace</strong> command. Alternatively the script can have a list of <strong>clone</strong> or <strong>define</strong> commands to recreate the desired configuration.</p>
+<p>The advantage of this approach is that you remove any old entries. It is also useful after an initial install by a package manager of the Nagios system to get rid of all the stock objects.</p>
 <hr />
