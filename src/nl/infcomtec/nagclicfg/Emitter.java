@@ -49,7 +49,7 @@ public class Emitter {
                 System.out.println("If there is only one argument and it is a valid file, we enter Ansible module mode.");
                 System.out.println("In Ansible mode the options -q and -j are in effect and arguments are read from the");
                 System.out.println("file in arg1=value1 arg2=value2 argsN=valueN format.");
-                System.out.println("In Ansible mode a few simple commands can be passed as cmd^cmd^cmd where ^ is.");
+                System.out.println("In Ansible mode a few simple commands can be passed as cmd^cmd^cmd where ^ is");
                 System.out.println("replaced with an EOLN.");
                 System.out.println("Alternatively, a script (input redirection) can be passed as script=path.");
                 System.out.println("The arguments (from either invocation) can be used in commands as |%1%|, |%2%|, ..., |%N%|");

@@ -25,3 +25,19 @@ What works:
 - Low learning curve, fairly obvious commands for system managers.
 - Optional JSON output for integration in higher-level applications.
 - Import foreign Nagios objects.
+
+Usage: 
+
+    nagclicfg [arguments file] | [arg1[,arg2[,...,argN]]][-q][-e][-j]
+    If there is only one argument and it is a valid file, we enter Ansible module mode.
+    In Ansible mode the options -q and -j are in effect and arguments are read from the
+    file in arg1=value1 arg2=value2 argsN=valueN format.
+    In Ansible mode a few simple commands can be passed as cmd^cmd^cmd where ^ is replaced with an EOLN.");
+    Alternatively, a script (input redirection) can be passed as script=path.
+    The arguments (from either invocation) can be used in commands as |%1%|, |%2%|, ..., |%N%|
+    These options are supported:
+    -- stop interpreting options.
+    -e print commands as read, debug mode.
+    -h this brief help (likewise --help or -anything-unknown).
+    -j output JSON, not text. Meant for use as a module by a higher application.
+    -q to suppress printing the prompt and banner.
