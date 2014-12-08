@@ -5,6 +5,8 @@ Command line configuration of Nagios and Ansible module.
 
 This has swiftly become a kind of "Swiss Army Knife" for Nagios.
 
+Make sure to check the wiki of this project as well!
+
 What works:
 
 - cd to groups, hosts, services.
